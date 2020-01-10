@@ -1,0 +1,128 @@
+commit d1b88183bb3fc5e338746db53269310348646753
+Author: Eric Sandeen <sandeen@sandeen.net>
+Date:   Fri Feb 3 10:17:25 2012 -0600
+
+    xfs_io: deprecate the "-F" foreign flag
+    
+    There's no real reason to force the user to specify "-F" for non-xfs
+    files, when we can just test for that after it's opened.
+    
+    * Remove the -F flag from usage() & man pages, but still accept it.
+    * Set IO_FOREIGN when we open the file, if the fd tests as non-xfs.
+    
+    Signed-off-by: Eric Sandeen <sandeen@redhat.com>
+    Reviewed-by: Christoph Hellwig <hch@lst.de>
+
+Index: xfsprogs-3.1.1/io/init.c
+===================================================================
+--- xfsprogs-3.1.1.orig/io/init.c
++++ xfsprogs-3.1.1/io/init.c
+@@ -32,7 +32,7 @@ void
+ usage(void)
+ {
+ 	fprintf(stderr,
+-		_("Usage: %s [-adFfmrRstx] [-p prog] [-c cmd]... file\n"),
++		_("Usage: %s [-adfmrRstx] [-p prog] [-c cmd]... file\n"),
+ 		progname);
+ 	exit(1);
+ }
+@@ -144,7 +144,7 @@ init(
+ 			flags |= IO_DIRECT;
+ 			break;
+ 		case 'F':
+-			flags |= IO_FOREIGN;
++			/* Ignored / deprecated now, handled automatically */
+ 			break;
+ 		case 'f':
+ 			flags |= IO_CREAT;
+@@ -187,9 +187,10 @@ init(
+ 	}
+ 
+ 	while (optind < argc) {
+-		if ((c = openfile(argv[optind], flags & IO_FOREIGN ?
+-					NULL : &geometry, flags, mode)) < 0)
++		if ((c = openfile(argv[optind], &geometry, flags, mode)) < 0)
+ 			exit(1);
++		if (!platform_test_xfs_fd(c))
++			flags |= IO_FOREIGN;
+ 		if (addfile(argv[optind], c, &geometry, flags) < 0)
+ 			exit(1);
+ 		optind++;
+Index: xfsprogs-3.1.1/io/open.c
+===================================================================
+--- xfsprogs-3.1.1.orig/io/open.c
++++ xfsprogs-3.1.1/io/open.c
+@@ -162,17 +162,9 @@ openfile(
+ 		}
+ 	}
+ 
+-	if (!geom)
++	if (!platform_test_xfs_fd(fd))
+ 		return fd;
+ 
+-	if (!platform_test_xfs_fd(fd)) {
+-		fprintf(stderr, _("%s: specified file "
+-			"[\"%s\"] is not on an XFS filesystem\n"),
+-			progname, path);
+-		close(fd);
+-		return -1;
+-	}
+-
+ 	if (xfsctl(path, fd, XFS_IOC_FSGEOMETRY, geom) < 0) {
+ 		perror("XFS_IOC_FSGEOMETRY");
+ 		close(fd);
+@@ -281,10 +273,10 @@ open_f(
+ 		return 0;
+ 	}
+ 
+-	while ((c = getopt(argc, argv, "FRacdfm:nrstx")) != EOF) {
++	while ((c = getopt(argc, argv, "Racdfm:nrstx")) != EOF) {
+ 		switch (c) {
+ 		case 'F':
+-			flags |= IO_FOREIGN;
++			/* Ignored / deprecated now, handled automatically */
+ 			break;
+ 		case 'a':
+ 			flags |= IO_APPEND;
+@@ -327,11 +319,13 @@ open_f(
+ 	if (optind != argc - 1)
+ 		return command_usage(&open_cmd);
+ 
+-	fd = openfile(argv[optind], flags & IO_FOREIGN ?
+-					NULL : &geometry, flags, mode);
++	fd = openfile(argv[optind], &geometry, flags, mode);
+ 	if (fd < 0)
+ 		return 0;
+ 
++	if (!platform_test_xfs_fd(fd))
++		flags |= IO_FOREIGN;
++
+ 	addfile(argv[optind], fd, &geometry, flags);
+ 	return 0;
+ }
+Index: xfsprogs-3.1.1/man/man8/xfs_io.8
+===================================================================
+--- xfsprogs-3.1.1.orig/man/man8/xfs_io.8
++++ xfsprogs-3.1.1/man/man8/xfs_io.8
+@@ -4,7 +4,7 @@ xfs_io \- debug the I/O path of an XFS f
+ .SH SYNOPSIS
+ .B xfs_io
+ [
+-.B \-adFfmrRstx
++.B \-adfmrRstx
+ ] [
+ .B \-c
+ .I cmd
+@@ -37,12 +37,6 @@ Set the program name for prompts and som
+ the default value is
+ .BR xfs_io .
+ .TP
+-.B \-F
+-Allow
+-.I file
+-to reside in non-XFS (foreign) filesystems.
+-This mode has a restricted set of commands.
+-.TP
+ .B \-f
+ Create
+ .I file

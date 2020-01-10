@@ -1,0 +1,89 @@
+commit 6bf4721d47d9755029a7ec944af2832bd115a851
+Author: Eric Sandeen <sandeen@redhat.com>
+Date:   Wed Jul 16 13:52:47 2014 +1000
+
+    repair: copy, don't clear, stripe geometry in backup SB
+    
+    Today, if we have a filesystem with stripe geometry and
+    a damaged primary superblock, we will zero out stripe geometry
+    if we have copied the backup.
+    
+    I'm guessing this might be because changing geometry with mount
+    options only updates the primary, so backups aren't guaranteed
+    to be current or correct.
+    
+    Unfortunately, that leaves us with sb 0 w/ no geom, and backups
+    *with* geom, so the next repair finds the mismatch, and complains.
+    (In other words, the 2nd repair does not come up clean.)_
+    And ... the second repair copies the backup stripe geometry back
+    into the primary!
+    
+    Rather than clearing stripe geometry in this case, just leave it
+    at what was found in the backup super, and inform the user that this
+    was done.  This leaves a consistent filesystem, and gives the user
+    a heads-up to double-check the result.
+    
+    This can all be demonstrated and tested by running xfs/030 with
+    geometry set in MKFS_OPTIONS.  (To really make the test pass,
+    we need to filter the warning out of repair output.)
+    
+    Signed-off-by: Eric Sandeen <sandeen@redhat.com>
+    Reviewed-by: Brian Foster <bfoster@redhat.com>
+    Signed-off-by: Dave Chinner <david@fromorbit.com>
+
+Index: xfsprogs-3.1.1/repair/globals.h
+===================================================================
+--- xfsprogs-3.1.1.orig/repair/globals.h
++++ xfsprogs-3.1.1/repair/globals.h
+@@ -123,7 +123,7 @@ EXTERN int	lazy_count;		/* What to set i
+ 
+ EXTERN int		primary_sb_modified;
+ EXTERN int		bad_ino_btree;
+-EXTERN int		clear_sunit;
++EXTERN int		copied_sunit;
+ EXTERN int		fs_is_dirty;
+ 
+ /* for hunting down the root inode */
+Index: xfsprogs-3.1.1/repair/sb.c
+===================================================================
+--- xfsprogs-3.1.1.orig/repair/sb.c
++++ xfsprogs-3.1.1/repair/sb.c
+@@ -147,7 +147,7 @@ find_secondary_sb(xfs_sb_t *rsb)
+ 			 */
+ 			memmove(rsb, &bufsb, sizeof(xfs_sb_t));
+ 			rsb->sb_inprogress = 0;
+-			clear_sunit = 1;
++			copied_sunit = 1;
+ 
+ 			if (verify_set_primary_sb(rsb, 0, &dirty) == XR_OK)  {
+ 				do_warn(
+Index: xfsprogs-3.1.1/repair/xfs_repair.c
+===================================================================
+--- xfsprogs-3.1.1.orig/repair/xfs_repair.c
++++ xfsprogs-3.1.1/repair/xfs_repair.c
+@@ -198,7 +198,7 @@ process_args(int argc, char **argv)
+ 	delete_attr_ok = 1;
+ 	force_geo = 0;
+ 	assume_xfs = 0;
+-	clear_sunit = 0;
++	copied_sunit = 0;
+ 	sb_inoalignmt = 0;
+ 	sb_unit = 0;
+ 	sb_width = 0;
+@@ -826,13 +826,11 @@ _("Warning:  project quota information w
+ 							XFS_OQUOTA_CHKD));
+ 	}
+ 
+-	if (clear_sunit) {
++	if (copied_sunit) {
+ 		do_warn(
+-_("Note - stripe unit (%d) and width (%d) fields have been reset.\n"
+-  "Please set with mount -o sunit=<value>,swidth=<value>\n"),
++_("Note - stripe unit (%d) and width (%d) were copied from a backup superblock.\n"
++  "Please reset with mount -o sunit=<value>,swidth=<value> if necessary\n"),
+ 			be32_to_cpu(dsb->sb_unit), be32_to_cpu(dsb->sb_width));
+-		dsb->sb_unit = 0;
+-		dsb->sb_width = 0;
+ 	}
+ 
+ 	libxfs_writebuf(sbp, 0);

@@ -1,0 +1,62 @@
+commit 71ec545511d4c8e6dc5b5288f7c7c6d01d1db7de
+Author: Eric Sandeen <sandeen@sandeen.net>
+Date:   Thu Mar 8 16:45:07 2012 -0600
+
+    xfs_io: allow -F in open args, remove from help
+    
+    Now that -F ("foreign") is automagic, we should no longer list
+    it in the help output for open, but we should still accept
+    it for compatibility; esp. as it is still in the case statement.
+    Oops.
+    
+    Remove the -F option from the manpage open section as well.
+    
+    Reported-by: Mark Tinguely <tinguely@sgi.com>
+    Signed-off-by: Eric Sandeen <sandeen@redhat.com>
+    Reviewed-by: Mark Tinguely <tinguely@sgi.com>
+
+Index: xfsprogs-3.1.1/io/open.c
+===================================================================
+--- xfsprogs-3.1.1.orig/io/open.c
++++ xfsprogs-3.1.1/io/open.c
+@@ -239,7 +239,6 @@ open_help(void)
+ "\n"
+ " Opens a file for subsequent use by all of the other xfs_io commands.\n"
+ " With no arguments, open uses the stat command to show the current file.\n"
+-" -F -- foreign filesystem file, disallow XFS-specific commands\n"
+ " -a -- open with the O_APPEND flag (append-only mode)\n"
+ " -d -- open with O_DIRECT (non-buffered IO, note alignment constraints)\n"
+ " -f -- open with O_CREAT (create the file if it doesn't exist)\n"
+@@ -273,7 +272,7 @@ open_f(
+ 		return 0;
+ 	}
+ 
+-	while ((c = getopt(argc, argv, "Racdfm:nrstx")) != EOF) {
++	while ((c = getopt(argc, argv, "FRacdfm:nrstx")) != EOF) {
+ 		switch (c) {
+ 		case 'F':
+ 			/* Ignored / deprecated now, handled automatically */
+Index: xfsprogs-3.1.1/man/man8/xfs_io.8
+===================================================================
+--- xfsprogs-3.1.1.orig/man/man8/xfs_io.8
++++ xfsprogs-3.1.1/man/man8/xfs_io.8
+@@ -83,7 +83,7 @@ command for more details on any command.
+ Display a list of all open files and (optionally) switch to an alternate
+ current open file.
+ .TP
+-.BI "open [[ \-FacdfrstR ] " path " ]"
++.BI "open [[ \-acdfrstR ] " path " ]"
+ Closes the current file, and opens the file specified by
+ .I path
+ instead. Without any arguments, displays statistics about the current
+@@ -93,10 +93,6 @@ command.
+ .RS 1.0i
+ .PD 0
+ .TP 0.4i
+-.B \-F
+-allows non-XFS (foreign) files to be opened and
+-operated on with a restricted command set.
+-.TP
+ .B \-a
+ opens append-only (O_APPEND).
+ .TP

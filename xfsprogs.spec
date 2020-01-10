@@ -1,7 +1,7 @@
 Summary:	Utilities for managing the XFS filesystem
 Name:		xfsprogs
 Version:	3.1.1
-Release:	16%{?dist}
+Release:	19%{?dist}
 # Licensing based on generic "GNU GENERAL PUBLIC LICENSE"
 # in source, with no mention of version.
 # doc/COPYING file specifies what is GPL and what is LGPL
@@ -53,6 +53,13 @@ Patch31:	xfsprogs-3.2.0-repair-early-progress-segfault.patch
 Patch32:	xfsprogs-3.2.0-xfs_fsr-selinux.patch
 Patch33:	xfsprogs-3.2.1-xfs_copy-exit-not-killall.patch
 Patch34:	xfsprogs-3.2.1-xfs_copy_fix_corruption.patch
+Patch35:	xfsprogs-3.1.11-xfs_quota-allow-project-names-digits.patch
+Patch36:	xfsprogs-3.2.3-xfs_repair-dont-check-symlink-comp-len.patch
+Patch37:	xfsprogs-3.1.8-xfs_repair-handle-log-ag-zero.patch
+Patch38:	xfsprogs-3.1.8-xfs_io-deprecate-F.patch
+Patch39:	xfsprogs-3.1.8-xfs_io-allow-F-open.patch
+Patch40:	xfsprogs-3.2.2-xfs_repair-sunit-backup-sb.patch
+Patch41:	xfsprogs-3.1.1-skip-FSGEOMETRY.patch
 
 %description
 A set of commands to use the XFS filesystem, including mkfs.xfs.
@@ -132,6 +139,13 @@ in building or running the xfstests QA suite.
 %patch32 -p1
 %patch33 -p1
 %patch34 -p1
+%patch35 -p1
+%patch36 -p1
+%patch37 -p1
+%patch38 -p1
+%patch39 -p1
+%patch40 -p1
+%patch41 -p1
 
 %build
 export tagname=CC DEBUG=-DNDEBUG
@@ -258,6 +272,18 @@ rm -rf $RPM_BUILD_ROOT
 %{_includedir}/xfs/xfs_types.h
 
 %changelog
+* Thu Feb 25 2016 Eric Sandeen <sandeen@redhat.com> 3.1.1-19
+- xfs_io: skip FSGEOMETRY call in openfile if no geom var present (#1303655)
+
+* Tue Nov 03 2015 Eric Sandeen <sandeen@redhat.com> 3.1.1-18
+- xfs_repair: preserve stripe geometry in backup superblock (#1118214)
+
+* Tue Nov 03 2015 Eric Sandeen <sandeen@redhat.com> 3.1.1-17
+- xfs_quota: Allow user project starting with digits (#1167413)
+- xfs_repair: Don't validate symlink component lengths (#1171267)
+- xfs_repair: Handle log in allocation group zero (#1215616)
+- xfs_io: deprecate -F flag (#1136742)
+
 * Mon Jun 16 2014 Eric Sandeen <sandeen@redhat.com> 3.1.1-16
 - xfs_copy: do not exit with error code if we succeed (#1100107)
 - xfs_copy: fix corruption when source fs sector size is > 512 bytes (#1104956)

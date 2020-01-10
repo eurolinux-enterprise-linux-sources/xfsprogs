@@ -1,0 +1,42 @@
+commit 649bfa9af35b3f23efc358aa9e517a24d9dd8878
+Author: Christoph Hellwig <hch@lst.de>
+Date:   Wed Jan 11 18:52:21 2012 +0000
+
+    repair: handle filesystems with the log in allocation group 0
+    
+    Sindre Skogen reported that repair chokes on a very small filesystem created
+    by mkfs.xfs from xfsprogs 2.9.4.  It turned out that for some reason this
+    filesystem had the log in allocation group 0 and thus repairs validation
+    of the root inode number was off.  Fix this by adding the log blocks if
+    the log is allocated in allocation group 0.
+    
+    Reviewed-by: Dave Chinner <dchinner@redhat.com>
+    Reported-by: Sindre Skogen <sindre@workzone.no>
+    Signed-off-by: Christoph Hellwig <hch@lst.de>
+
+Index: xfsprogs-3.1.1/repair/xfs_repair.c
+===================================================================
+--- xfsprogs-3.1.1.orig/repair/xfs_repair.c
++++ xfsprogs-3.1.1/repair/xfs_repair.c
+@@ -411,12 +411,16 @@ calc_mkfs(xfs_mount_t *mp)
+ 	fino_bno = inobt_root + XFS_MIN_FREELIST_RAW(1, 1, mp) + 1;
+ 
+ 	/*
+-	 * If we only have a single allocation group the log is also allocated
+-	 * in the first allocation group and we need to add the number of
+-	 * blocks used by the log to the above calculation.
+-	 * All this of course doesn't apply if we have an external log.
++	 * If the log is allocated in the first allocation group we need to
++	 * add the number of blocks used by the log to the above calculation.
++	 *
++	 * This can happens with filesystems that only have a single
++	 * allocation group, or very odd geometries created by old mkfs
++	 * versions on very small filesystems.
+ 	 */
+-	if (mp->m_sb.sb_agcount == 1 && mp->m_sb.sb_logstart) {
++	if (mp->m_sb.sb_logstart &&
++	    XFS_FSB_TO_AGNO(mp, mp->m_sb.sb_logstart) == 0) {
++
+ 		/*
+ 		 * XXX(hch): verify that sb_logstart makes sense?
+ 		 */

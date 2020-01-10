@@ -1,0 +1,70 @@
+commit 2116b6a6714586e6775fd20337efa54968d08250
+Author: Eric Sandeen <sandeen@sandeen.net>
+Date:   Fri Feb 6 10:24:36 2015 +1100
+
+    xfs_repair: do not check symlink component lengths
+    
+    As reported by Andy Grimm,
+    
+    # ln -s $( python -c 'print "a" * 260' ) /mnt/foo
+    
+    will succeed on xfs, but then xfs_repair will complain:
+    
+    component of symlink in inode 131 too long
+    problem with symbolic link in inode 131
+    would have cleared inode 131
+    
+    The kernel checks the total length of the symlink on both read
+    and write, but does not look at component paths.
+    
+    Looking around the kernel, no other filesystem checks component
+    lengths, nor does the vfs.  And as Andy points out, the target
+    could even be on a different filesystem, with different limitations.
+    
+    And having a "too-long" component doesn't even seem like something
+    likely to stem from disk corruption anyway, so I'm not sure why repair
+    should care.
+    
+    Therefore I propose removing the component length checks from xfs_repair.
+    
+    Andy Grimm <agrimm@redhat.com>
+    Signed-off-by: Eric Sandeen <sandeen@redhat.com>
+    Reviewed-by: Brian Foster <bfoster@redhat.com>
+    Signed-off-by: Dave Chinner <david@fromorbit.com>
+
+Index: xfsprogs-3.1.1/repair/dinode.c
+===================================================================
+--- xfsprogs-3.1.1.orig/repair/dinode.c
++++ xfsprogs-3.1.1/repair/dinode.c
+@@ -1544,31 +1544,6 @@ process_symlink(
+ 		return(1);
+ 	}
+ 
+-	/*
+-	 * check for any component being too long
+-	 */
+-	if (be64_to_cpu(dinoc->di_size) >= MAXNAMELEN)  {
+-		cptr = strchr(symlink, '/');
+-
+-		while (cptr != NULL)  {
+-			if (cptr - symlink >= MAXNAMELEN)  {
+-				do_warn(
+-			_("component of symlink in inode %llu too long\n"),
+-					lino);
+-				return(1);
+-			}
+-			symlink = cptr + 1;
+-			cptr = strchr(symlink, '/');
+-		}
+-
+-		if (strlen(symlink) >= MAXNAMELEN)  {
+-			do_warn(
+-			_("component of symlink in inode %llu too long\n"),
+-				lino);
+-			return(1);
+-		}
+-	}
+-
+ 	return(0);
+ }
+ 

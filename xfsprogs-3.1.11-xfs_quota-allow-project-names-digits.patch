@@ -1,0 +1,114 @@
+commit fd537fc50eeade63bbd2a66105f39d04a011a7f5
+Author: Rich Johnston <rjohnston@sgi.com>
+Date:   Mon Apr 22 17:32:05 2013 +0000
+
+    xfsprogs: xfs_quota allow user or group names beginning with digits
+    
+    xfs_quota does not properly parse users or groups that begin with a number.
+    Only call atoi when user or group consists of digits only.
+    
+    Signed-off-by: Rich Johnston <rjohnston@sgi.com>
+    Reported-by: James Carter <james.carter@bytemark.co.uk>
+    Reviewed-by: Eric Sandeen <sandeen@redhat.com>
+    Reviewed-by: Chandra Seetharaman <sekharan@us.ibm.com>
+
+diff --git a/include/input.h b/include/input.h
+index b227983..61b40c8 100644
+--- a/include/input.h
++++ b/include/input.h
+@@ -22,6 +22,7 @@
+ #include <grp.h>
+ #include <sys/types.h>
+ #include <xfs/project.h>
++#include <stdbool.h>
+ 
+ extern char	**breakline(char *input, int *count);
+ extern void	doneline(char *input, char **vec);
+@@ -46,6 +47,7 @@ extern void	timestr(struct timeval *tv, char *str, size_t sz, int flags);
+ extern uid_t	uid_from_string(char *user);
+ extern gid_t	gid_from_string(char *group);
+ extern prid_t	prid_from_string(char *project);
++extern bool	isdigits_only(const char *str);
+ 
+ #define HAVE_FTW_H 1	/* TODO: configure me */
+ 
+diff --git a/libxcmd/input.c b/libxcmd/input.c
+index b0c1326..c06b5b8 100644
+--- a/libxcmd/input.c
++++ b/libxcmd/input.c
+@@ -19,6 +19,7 @@
+ #include <xfs/xfs.h>
+ #include <xfs/input.h>
+ #include <ctype.h>
++#include <stdbool.h>
+ 
+ #if defined(ENABLE_READLINE)
+ # include <readline/history.h>
+@@ -398,6 +399,18 @@ gid_from_string(
+ 	return -1;
+ }
+ 
++bool isdigits_only(
++	const char *str)
++{
++	int i;
++
++	for (i = 0; i < strlen(str); i++) {
++		if (!isdigit(str[i]))
++			return false;
++	}
++	return true;
++}
++
+ #define HAVE_FTW_H 1	/* TODO: configure me */
+ 
+ #ifndef HAVE_FTW_H
+diff --git a/quota/quota.c b/quota/quota.c
+index 3fba055..7e52ad2 100644
+--- a/quota/quota.c
++++ b/quota/quota.c
+@@ -224,7 +224,7 @@ quota_user_type(
+ 	uid_t		id;
+ 
+ 	if (name) {
+-		if (isdigit(name[0])) {
++		if (isdigits_only(name)) {
+ 			id = atoi(name);
+ 			name = getusername(id, flags & NO_LOOKUP_FLAG);
+ 		} else if ((u = getpwnam(name))) {
+@@ -273,7 +273,7 @@ quota_group_type(
+ 	int		i, ngroups, dofree = 0;
+ 
+ 	if (name) {
+-		if (isdigit(name[0])) {
++		if (isdigits_only(name)) {
+ 			gid = atoi(name);
+ 			name = getgroupname(gid, flags & NO_LOOKUP_FLAG);
+ 		} else {
+@@ -344,7 +344,7 @@ quota_proj_type(
+ 		return;
+ 	}
+ 
+-	if (isdigit(name[0])) {
++	if (isdigits_only(name)) {
+ 		id = atoi(name);
+ 		name = getprojectname(id, flags & NO_LOOKUP_FLAG);
+ 	} else if ((p = getprnam(name))) {
+diff --git a/quota/quota.h b/quota/quota.h
+index 78f2164..618bb49 100644
+--- a/quota/quota.h
++++ b/quota/quota.h
+@@ -19,6 +19,7 @@
+ #include <xfs/xqm.h>
+ #include <xfs/path.h>
+ #include <xfs/project.h>
++#include <stdbool.h>
+ 
+ /*
+  * Different forms of XFS quota
+@@ -80,4 +81,5 @@ enum {
+ extern char *uid_to_name(__uint32_t __uid);
+ extern char *gid_to_name(__uint32_t __gid);
+ extern char *prid_to_name(__uint32_t __prid);
++extern bool isdigits_only(const char *);
+ 

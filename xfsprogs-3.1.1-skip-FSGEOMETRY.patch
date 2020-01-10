@@ -1,0 +1,28 @@
+commit 1bc7dfb22c8179580e5223f2c6194803478d769b
+Author: Eric Sandeen <sandeen@sandeen.net>
+Date:   Fri Feb 17 14:42:08 2012 -0600
+
+    xfs_io: skip FSGEOMETRY call in openfile if no geom var present
+    
+    sendfile_f() calls openfile() with NULL *geom even if it's on an
+    xfs filesystem, so we need to skip the ioctl if (!geom).
+    
+    Fixes regression from d1b88183bb3fc5e338746db53269310348646753
+    
+    Reported-by: Christoph Hellwig <hch@infradead.org>
+    Signed-off-by: Eric Sandeen <sandeen@redhat.com>
+    Reviewed-by: Christoph Hellwig <hch@lst.de>
+
+diff --git a/io/open.c b/io/open.c
+index 97631e2..ac39ccc 100644
+--- a/io/open.c
++++ b/io/open.c
+@@ -163,7 +163,7 @@ openfile(
+ 		}
+ 	}
+ 
+-	if (!platform_test_xfs_fd(fd))
++	if (!geom || !platform_test_xfs_fd(fd))
+ 		return fd;
+ 
+ 	if (xfsctl(path, fd, XFS_IOC_FSGEOMETRY, geom) < 0) {
