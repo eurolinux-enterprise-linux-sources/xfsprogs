@@ -1,7 +1,7 @@
 Summary:	Utilities for managing the XFS filesystem
 Name:		xfsprogs
 Version:	3.1.1
-Release:	14%{?dist}
+Release:	16%{?dist}
 # Licensing based on generic "GNU GENERAL PUBLIC LICENSE"
 # in source, with no mention of version.
 # doc/COPYING file specifies what is GPL and what is LGPL
@@ -48,6 +48,11 @@ Patch26:	xfsprogs-3.1.18-repair-unlinked-walk.patch
 Patch27:	xfsprogs-3.1.1-logprint-continuation.patch
 Patch28:	xfsprogs-3.1.1-logprint-fix-continuation.patch
 Patch29:	xfsprogs-3.1.1-logprint-fix-wrapped-log.patch
+Patch30:	xfsprogs-3.2.0-platform_test_xfs_fd-regular-files.patch
+Patch31:	xfsprogs-3.2.0-repair-early-progress-segfault.patch
+Patch32:	xfsprogs-3.2.0-xfs_fsr-selinux.patch
+Patch33:	xfsprogs-3.2.1-xfs_copy-exit-not-killall.patch
+Patch34:	xfsprogs-3.2.1-xfs_copy_fix_corruption.patch
 
 %description
 A set of commands to use the XFS filesystem, including mkfs.xfs.
@@ -122,6 +127,11 @@ in building or running the xfstests QA suite.
 %patch27 -p1
 %patch28 -p1
 %patch29 -p1
+%patch30 -p1
+%patch31 -p1
+%patch32 -p1
+%patch33 -p1
+%patch34 -p1
 
 %build
 export tagname=CC DEBUG=-DNDEBUG
@@ -248,6 +258,15 @@ rm -rf $RPM_BUILD_ROOT
 %{_includedir}/xfs/xfs_types.h
 
 %changelog
+* Mon Jun 16 2014 Eric Sandeen <sandeen@redhat.com> 3.1.1-16
+- xfs_copy: do not exit with error code if we succeed (#1100107)
+- xfs_copy: fix corruption when source fs sector size is > 512 bytes (#1104956)
+
+* Mon May 05 2014 Eric Sandeen <sandeen@redhat.com> 3.1.1-15
+- libxfs: restrict platform_test_xfs_fd to regular files (#1018751)
+- xfs_repair: avoid segfault if reporting progress early in repair (#1020438)
+- xfs_fsr: fix SWAPEXT failures under selinux (#1024702)
+
 * Fri Aug 30 2013 Eric Sandeen <sandeen@redhat.com> 3.1.1-14
 - xfs_logprint: More fixes for continuations & log wraps  (#1002908)
 

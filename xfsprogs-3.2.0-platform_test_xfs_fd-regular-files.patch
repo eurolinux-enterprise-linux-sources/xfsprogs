@@ -1,0 +1,74 @@
+commit fcd6fa7f6a29188a756ff8b071a152bc9d62baf4
+Author: Eric Sandeen <sandeen@redhat.com>
+Date:   Tue Oct 8 15:17:50 2013 +0000
+
+    xfsprogs: restrict platform_test_xfs_fd to regular files
+    
+    If a special file (block, char, pipe etc) resides on an
+    xfs filesystem, platform_test_xfs_[fd|path] will return
+    true, but a subsequent xfsctl will fail, because the file
+    operations to support the xfs ioctls are not set up on such
+    files (see i_fop assignments in xfs_setup_inode()).
+    
+    >From the xfsctl manpage it's pretty clear that these functions
+    are supposed to return true if a subsequent xfsctl can be
+    handled, so it makes sense to exclude special files.
+    
+    This was showing up in xfstest generic/306, which creates
+    the dev/null block device on an xfstest an tries to pwrite
+    to it with xfs_io - which emitted a warning when the xfsctl
+    trying to get geometry failed.
+    
+    Signed-off-by: Eric Sandeen <sandeen@redhat.com>
+    Reviewed-by: Christoph Hellwig <hch@lst.de>
+    Signed-off-by: Rich Johnston <rjohnston@sgi.com>
+
+diff --git a/include/linux.h b/include/linux.h
+index 5bb91cd..502fd1f 100644
+--- a/include/linux.h
++++ b/include/linux.h
+@@ -34,20 +34,38 @@ static __inline__ int xfsctl(const char *path, int fd, int cmd, void *p)
+ 	return ioctl(fd, cmd, p);
+ }
+ 
++/*
++ * platform_test_xfs_*() implies that xfsctl will succeed on the file;
++ * on Linux, at least, special files don't get xfs file ops,
++ * so return 0 for those
++ */
++
+ static __inline__ int platform_test_xfs_fd(int fd)
+ {
+-	struct statfs buf;
+-	if (fstatfs(fd, &buf) < 0)
++	struct statfs statfsbuf;
++	struct stat statbuf;
++
++	if (fstatfs(fd, &statfsbuf) < 0)
++		return 0;
++	if (fstat(fd, &statbuf) < 0)
+ 		return 0;
+-	return (buf.f_type == 0x58465342);	/* XFSB */
++	if (!S_ISREG(statbuf.st_mode) && !S_ISDIR(statbuf.st_mode))
++		return 0;
++	return (statfsbuf.f_type == 0x58465342);	/* XFSB */
+ }
+ 
+ static __inline__ int platform_test_xfs_path(const char *path)
+ {
+-	struct statfs buf;
+-	if (statfs(path, &buf) < 0)
++	struct statfs statfsbuf;
++	struct stat statbuf;
++
++	if (statfs(path, &statfsbuf) < 0)
++		return 0;
++	if (stat(path, &statbuf) < 0)
++		return 0;
++	if (!S_ISREG(statbuf.st_mode) && !S_ISDIR(statbuf.st_mode))
+ 		return 0;
+-	return (buf.f_type == 0x58465342);	/* XFSB */
++	return (statfsbuf.f_type == 0x58465342);	/* XFSB */
+ }
+ 
+ static __inline__ int platform_fstatfs(int fd, struct statfs *buf)

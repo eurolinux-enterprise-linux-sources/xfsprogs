@@ -1,0 +1,66 @@
+commit 7f2d6b811755b6b91f18aa5bd9d5980848a81267
+Author: Eric Sandeen <sandeen@redhat.com>
+Date:   Thu Oct 17 17:50:16 2013 +0000
+
+    xfs_repair: avoid segfault if reporting progress early in repair
+    
+    For a very large filesystem, zeroing the log may take some time.
+    
+    If we ask for progress reports frequently enough that one fires
+    before we finish with log zeroing, we try to use a progress format
+    which has not yet been set up, and segfault:
+    
+    # mkfs.xfs -d size=60t,file,name=fsfile
+    # xfs_repair -m 9000 -o ag_stride=32 -t 1 fsfile
+    Phase 1 - find and verify superblock...
+            - reporting progress in intervals of 1 seconds
+    Phase 2 - using internal log
+            - zero log...
+    Segmentation fault
+    
+    (gdb) bt
+    #0  0x0000000000426962 in progress_rpt_thread (p=0x67ad20) at progress.c:234
+    #1  0x0000003b98a07851 in start_thread (arg=0x7f19d8e47700) at pthread_create.c:301
+    #2  0x0000003b982e767d in ?? ()
+    #3  0x0000000000000000 in ?? ()
+    (gdb) p msgp
+    $1 = (msg_block_t *) 0x67ad20
+    (gdb) p msgp->format
+    $2 = (progress_rpt_t *) 0x0
+    (gdb)
+    
+    I suppose we could rig up progress reports for log zeroing, but
+    that won't usually take terribly long; for now, be defensive
+    and init the message->format to NULL, and just return early
+    from the progress thread if we've not yet set up any message.
+    
+    (Sure, global_msgs is global, and ->format is already NULL,
+    but to me it's worth being explicit since we will test it).
+    
+    Signed-off-by: Eric Sandeen <sandeen@redhat.com>
+    Reviewed-by: Christoph Hellwig <hch@lst.de>
+    Signed-off-by: Rich Johnston <rjohnston@sgi.com>
+
+diff --git a/repair/progress.c b/repair/progress.c
+index ab320dc..45a412e 100644
+--- a/repair/progress.c
++++ b/repair/progress.c
+@@ -124,6 +124,7 @@ init_progress_rpt (void)
+ 	 */
+ 
+ 	pthread_mutex_init(&global_msgs.mutex, NULL);
++	global_msgs.format = NULL;
+ 	global_msgs.count = glob_agcount;
+ 	global_msgs.interval = report_interval;
+ 	global_msgs.done   = prog_rpt_done;
+@@ -169,6 +170,10 @@ progress_rpt_thread (void *p)
+ 	msg_block_t *msgp = (msg_block_t *)p;
+ 	__uint64_t percent;
+ 
++	/* It's possible to get here very early w/ no progress msg set */
++	if (!msgp->format)
++		return NULL;
++
+ 	if ((msgbuf = (char *)malloc(DURATION_BUF_SIZE)) == NULL)
+ 		do_error (_("progress_rpt: cannot malloc progress msg buffer\n"));
+ 
