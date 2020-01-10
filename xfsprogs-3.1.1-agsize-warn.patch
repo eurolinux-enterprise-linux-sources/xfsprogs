@@ -1,0 +1,86 @@
+commit ddf12ea5dc56a728f24d24c5d7403c3412b40b86
+Author: Eric Sandeen <sandeen@redhat.com>
+Date:   Wed Mar 28 22:23:11 2012 -0500
+
+    mkfs.xfs: print std info if agcount makes agsize out of bounds
+    
+    When specifying a too-small agcount with stripe geometry,
+    mkfs.xfs can fail with a somewhat unexpected message:
+    
+    $ mkfs.xfs -f -d file,name=fsfile,size=9764864000b,agcount=31,su=512k,sw=20
+    Allocation group size (314995613) is not a multiple of the stripe unit (128)
+    
+    This strikes me as especially odd because normally, mkfs.xfs
+    tries to fix up the agsize to be a stripe multiple.  The only way
+    we get to the above error message is if ag _size_ is out of bounds;
+    exiting with an error about alignment rather than about size
+    seems odd.
+    
+    Maybe below is too clever, but if by the time we've decided that
+    agsize is out of bounds after rounding it both up and down,
+    as necessary, to get to a stripe-width multiple, calling
+    validate_ag_geometry() will give us the same standard message as
+    if we had specified no stripe geometry:
+    
+    $ mkfs/mkfs.xfs -f -d file,name=fsfile,size=9764864000b,agcount=31,su=512k,sw=20
+    agsize (314995613b) too big, maximum is 268435455 blocks
+    Usage: mkfs.xfs
+    ...
+    
+    $ mkfs/mkfs.xfs -f -d file,name=fsfile,size=9764864000b,agcount=31
+    agsize (314995613b) too big, maximum is 268435455 blocks
+    Usage: mkfs.xfs
+    ...
+    
+    Also, tidy up error message to explicitly state "blocks" not "b"
+    
+    Signed-off-by: Eric Sandeen <sandeen@redhat.com>
+    Reviewed-by: Dave Chinner <dchinner@redhat.com>
+
+Index: xfsprogs-3.1.1/mkfs/xfs_mkfs.c
+===================================================================
+--- xfsprogs-3.1.1.orig/mkfs/xfs_mkfs.c
++++ xfsprogs-3.1.1/mkfs/xfs_mkfs.c
+@@ -704,7 +704,7 @@ validate_ag_geometry(
+ {
+ 	if (agsize < XFS_AG_MIN_BLOCKS(blocklog)) {
+ 		fprintf(stderr,
+-	_("agsize (%lldb) too small, need at least %lld blocks\n"),
++	_("agsize (%lld blocks) too small, need at least %lld blocks\n"),
+ 			(long long)agsize,
+ 			(long long)XFS_AG_MIN_BLOCKS(blocklog));
+ 		usage();
+@@ -712,7 +712,7 @@ validate_ag_geometry(
+ 
+ 	if (agsize > XFS_AG_MAX_BLOCKS(blocklog)) {
+ 		fprintf(stderr,
+-	_("agsize (%lldb) too big, maximum is %lld blocks\n"),
++	_("agsize (%lld blocks) too big, maximum is %lld blocks\n"),
+ 			(long long)agsize,
+ 			(long long)XFS_AG_MAX_BLOCKS(blocklog));
+ 		usage();
+@@ -720,7 +720,7 @@ validate_ag_geometry(
+ 
+ 	if (agsize > dblocks) {
+ 		fprintf(stderr,
+-	_("agsize (%lldb) too big, data area is %lld blocks\n"),
++	_("agsize (%lld blocks) too big, data area is %lld blocks\n"),
+ 			(long long)agsize, (long long)dblocks);
+ 			usage();
+ 	}
+@@ -2159,9 +2159,12 @@ _("size %s specified for log subvolume i
+ 				if (nodsflag) {
+ 					dsunit = dswidth = 0;
+ 				} else {
+-					fprintf(stderr,
+-_("Allocation group size (%lld) is not a multiple of the stripe unit (%d)\n"),
+-						(long long)agsize, dsunit);
++					/*
++					 * agsize is out of bounds, this will
++					 * print nice details & exit.
++					 */
++					validate_ag_geometry(blocklog, dblocks,
++							    agsize, agcount);
+ 					exit(1);
+ 				}
+ 			}

@@ -1,0 +1,543 @@
+commit 22bc10ed741c13c7104694efceb5b59d58a53cbc
+Author: Arkadiusz Mi?kiewicz <arekm@maven.pl>
+Date:   Mon Oct 4 08:03:58 2010 +0000
+
+    xfsprogs: projid32bit handling
+    
+    Add projid32bit handling to userspace. mkfs.xfs is able to enable
+    this feature for new filesystems. xfs_db knows what projid_lo/hi are.
+    
+    Signed-off-by: Arkadiusz Miśkiewicz <arekm@maven.pl>
+    Signed-off-by: Alex Elder <aelder@sgi.com>
+
+Index: xfsprogs-3.1.1/db/check.c
+===================================================================
+--- xfsprogs-3.1.1.orig/db/check.c
++++ xfsprogs-3.1.1/db/check.c
+@@ -2837,7 +2837,7 @@ process_inode(
+ 			break;
+ 		}
+ 		if (ic) {
+-			dqprid = idic.di_projid;	/* dquot ID is u32 */
++			dqprid = xfs_get_projid(idic);	/* dquot ID is u32 */
+ 			quota_add(&dqprid, &idic.di_gid, &idic.di_uid,
+ 				  0, bc, ic, rc);
+ 		}
+Index: xfsprogs-3.1.1/db/inode.c
+===================================================================
+--- xfsprogs-3.1.1.orig/db/inode.c
++++ xfsprogs-3.1.1/db/inode.c
+@@ -81,8 +81,10 @@ const field_t	inode_core_flds[] = {
+ 	  FLD_COUNT, TYP_NONE },
+ 	{ "onlink", FLDT_UINT16D, OI(COFF(onlink)), inode_core_onlink_count,
+ 	  FLD_COUNT, TYP_NONE },
+-	{ "projid", FLDT_UINT16D, OI(COFF(projid)), inode_core_projid_count,
+-	  FLD_COUNT, TYP_NONE },
++	{ "projid_lo", FLDT_UINT16D, OI(COFF(projid_lo)),
++	  inode_core_projid_count, FLD_COUNT, TYP_NONE },
++	{ "projid_hi", FLDT_UINT16D, OI(COFF(projid_hi)),
++	  inode_core_projid_count, FLD_COUNT, TYP_NONE },
+ 	{ "uid", FLDT_UINT32D, OI(COFF(uid)), C1, 0, TYP_NONE },
+ 	{ "gid", FLDT_UINT32D, OI(COFF(gid)), C1, 0, TYP_NONE },
+ 	{ "flushiter", FLDT_UINT16D, OI(COFF(flushiter)), C1, 0, TYP_NONE },
+Index: xfsprogs-3.1.1/db/sb.c
+===================================================================
+--- xfsprogs-3.1.1.orig/db/sb.c
++++ xfsprogs-3.1.1/db/sb.c
+@@ -620,6 +620,8 @@ version_string(
+ 		strcat(s, ",ATTR2");
+ 	if (xfs_sb_version_haslazysbcount(sbp))
+ 		strcat(s, ",LAZYSBCOUNT");
++	if (xfs_sb_version_hasprojid32bit(sbp))
++		strcat(s, ",PROJID32BIT");
+ 	return s;
+ }
+ 
+@@ -696,6 +698,10 @@ version_f(
+ 			xfs_sb_version_addattr2(&mp->m_sb);
+ 			version = mp->m_sb.sb_versionnum;
+ 			features = mp->m_sb.sb_features2;
++		} else if (!strcasecmp(argv[1], "projid32bit")) {
++			xfs_sb_version_addprojid32bit(&mp->m_sb);
++			version = mp->m_sb.sb_versionnum;
++			features = mp->m_sb.sb_features2;
+ 		} else {
+ 			dbprintf(_("%s: invalid version change command \"%s\"\n"),
+ 				progname, argv[1]);
+Index: xfsprogs-3.1.1/db/xfs_admin.sh
+===================================================================
+--- xfsprogs-3.1.1.orig/db/xfs_admin.sh
++++ xfsprogs-3.1.1/db/xfs_admin.sh
+@@ -6,9 +6,9 @@
+ status=0
+ DB_OPTS=""
+ REPAIR_OPTS=""
+-USAGE="Usage: xfs_admin [-efjluV] [-c 0|1] [-L label] [-U uuid] device"
++USAGE="Usage: xfs_admin [-efjlpuV] [-c 0|1] [-L label] [-U uuid] device"
+ 
+-while getopts "efjluc:L:U:V" c
++while getopts "efjlpuc:L:U:V" c
+ do
+ 	case $c in
+ 	c)	REPAIR_OPTS=$REPAIR_OPTS" -c lazycount="$OPTARG;;
+@@ -17,6 +17,7 @@ do
+ 	j)	DB_OPTS=$DB_OPTS" -c 'version log2'";;
+ 	l)	DB_OPTS=$DB_OPTS" -r -c label";;
+ 	L)	DB_OPTS=$DB_OPTS" -c 'label "$OPTARG"'";;
++	p)	DB_OPTS=$DB_OPTS" -c 'version projid32bit'";;
+ 	u)	DB_OPTS=$DB_OPTS" -r -c uuid";;
+ 	U)	DB_OPTS=$DB_OPTS" -c 'uuid "$OPTARG"'";;
+ 	V)	xfs_db -p xfs_admin -V
+Index: xfsprogs-3.1.1/include/xfs_dinode.h
+===================================================================
+--- xfsprogs-3.1.1.orig/include/xfs_dinode.h
++++ xfsprogs-3.1.1/include/xfs_dinode.h
+@@ -52,8 +52,9 @@ typedef struct xfs_dinode_core {
+ 	__be32		di_uid;		/* owner's user id */
+ 	__be32		di_gid;		/* owner's group id */
+ 	__be32		di_nlink;	/* number of links to file */
+-	__be16		di_projid;	/* owner's project id */
+-	__u8		di_pad[8];	/* unused, zeroed space */
++	__be16		di_projid_lo;	/* lower part of owner's project id */
++	__be16		di_projid_hi;	/* higher part owner's project id */
++	__u8		di_pad[6];	/* unused, zeroed space */
+ 	__be16		di_flushiter;	/* incremented on flush */
+ 	xfs_timestamp_t	di_atime;	/* time last accessed */
+ 	xfs_timestamp_t	di_mtime;	/* time last modified */
+Index: xfsprogs-3.1.1/include/xfs_fs.h
+===================================================================
+--- xfsprogs-3.1.1.orig/include/xfs_fs.h
++++ xfsprogs-3.1.1/include/xfs_fs.h
+@@ -299,9 +299,11 @@ typedef struct xfs_bstat {
+ 	__s32		bs_extsize;	/* extent size			*/
+ 	__s32		bs_extents;	/* number of extents		*/
+ 	__u32		bs_gen;		/* generation count		*/
+-	__u16		bs_projid;	/* project id			*/
++	__u16		bs_projid_lo;	/* lower part of project id	*/
++#define	bs_projid	bs_projid_lo
+ 	__u16		bs_forkoff;	/* inode fork offset in bytes	*/
+-	unsigned char	bs_pad[12];	/* pad space, unused		*/
++	__u16		bs_projid_hi;	/* higher part of project id	*/
++	unsigned char	bs_pad[10];	/* pad space, unused		*/
+ 	__u32		bs_dmevmask;	/* DMIG event mask		*/
+ 	__u16		bs_dmstate;	/* DMIG state info		*/
+ 	__u16		bs_aextents;	/* attribute number of extents	*/
+@@ -505,4 +507,15 @@ typedef struct xfs_handle {
+ #define BBTOB(bbs)	((bbs) << BBSHIFT)
+ #endif
+ 
++/*
++ * Project quota id helpers (previously projid was 16bit only
++ * and using two 16bit values to hold new 32bit projid was choosen
++ * to retain compatibility with "old" filesystems).
++ */
++static inline __uint32_t
++bstat_get_projid(struct xfs_bstat *bs)
++{
++	return (__uint32_t)bs->bs_projid_hi << 16 | bs->bs_projid_lo;
++}
++
+ #endif	/* __XFS_FS_H__ */
+Index: xfsprogs-3.1.1/include/xfs_inode.h
+===================================================================
+--- xfsprogs-3.1.1.orig/include/xfs_inode.h
++++ xfsprogs-3.1.1/include/xfs_inode.h
+@@ -124,8 +124,9 @@ typedef struct xfs_icdinode {
+ 	__uint32_t	di_uid;		/* owner's user id */
+ 	__uint32_t	di_gid;		/* owner's group id */
+ 	__uint32_t	di_nlink;	/* number of links to file */
+-	__uint16_t	di_projid;	/* owner's project id */
+-	__uint8_t	di_pad[8];	/* unused, zeroed space */
++	__uint16_t	di_projid_lo;	/* lower part of owner's project id */
++	__uint16_t	di_projid_hi;	/* higher part of owner's project id */
++	__uint8_t	di_pad[6];	/* unused, zeroed space */
+ 	__uint16_t	di_flushiter;	/* incremented on flush */
+ 	xfs_ictimestamp_t di_atime;	/* time last accessed */
+ 	xfs_ictimestamp_t di_mtime;	/* time last modified */
+@@ -204,6 +205,24 @@ typedef struct xfs_icdinode {
+ 		((ip)->i_d.di_anextents = (n)))
+ 
+ 
++/*
++ * Project quota id helpers (previously projid was 16bit only
++ * and using two 16bit values to hold new 32bit projid was choosen
++ * to retain compatibility with "old" filesystems).
++ */
++static inline __uint32_t
++xfs_get_projid(struct xfs_icdinode i_d)
++{
++	return (__uint32_t)i_d.di_projid_hi << 16 | i_d.di_projid_lo;
++}
++
++static inline void
++xfs_set_projid(struct xfs_icdinode *i_d,
++		__uint32_t projid)
++{
++	i_d->di_projid_hi = (__uint16_t) (projid >> 16);
++	i_d->di_projid_lo = (__uint16_t) (projid & 0xffff);
++}
+ 
+ #ifdef __KERNEL__
+ 
+@@ -510,7 +529,7 @@ int		xfs_finish_reclaim_all(struct xfs_m
+ int		xfs_iread(struct xfs_mount *, struct xfs_trans *, xfs_ino_t,
+ 			  xfs_inode_t **, xfs_daddr_t, uint);
+ int		xfs_ialloc(struct xfs_trans *, xfs_inode_t *, mode_t,
+-			   xfs_nlink_t, xfs_dev_t, struct cred *, xfs_prid_t,
++			   xfs_nlink_t, xfs_dev_t, struct cred *, prid_t,
+ 			   int, struct xfs_buf **, boolean_t *, xfs_inode_t **);
+ 
+ uint		xfs_ip2xflags(struct xfs_inode *);
+Index: xfsprogs-3.1.1/include/xfs_sb.h
+===================================================================
+--- xfsprogs-3.1.1.orig/include/xfs_sb.h
++++ xfsprogs-3.1.1/include/xfs_sb.h
+@@ -80,10 +80,12 @@ struct xfs_mount;
+ #define XFS_SB_VERSION2_RESERVED4BIT	0x00000004
+ #define XFS_SB_VERSION2_ATTR2BIT	0x00000008	/* Inline attr rework */
+ #define XFS_SB_VERSION2_PARENTBIT	0x00000010	/* parent pointers */
++#define XFS_SB_VERSION2_PROJID32BIT	0x00000080	/* 32 bit project id */
+ 
+ #define	XFS_SB_VERSION2_OKREALFBITS	\
+ 	(XFS_SB_VERSION2_LAZYSBCOUNTBIT	| \
+-	 XFS_SB_VERSION2_ATTR2BIT)
++	 XFS_SB_VERSION2_ATTR2BIT	| \
++	 XFS_SB_VERSION2_PROJID32BIT)
+ #define	XFS_SB_VERSION2_OKSASHFBITS	\
+ 	(0)
+ #define XFS_SB_VERSION2_OKREALBITS	\
+@@ -489,6 +491,19 @@ static inline void xfs_sb_version_remove
+ 		sbp->sb_versionnum &= ~XFS_SB_VERSION_MOREBITSBIT;
+ }
+ 
++static inline int xfs_sb_version_hasprojid32bit(xfs_sb_t *sbp)
++{
++	return xfs_sb_version_hasmorebits(sbp) &&
++		(sbp->sb_features2 & XFS_SB_VERSION2_PROJID32BIT);
++}
++
++static inline void xfs_sb_version_addprojid32bit(xfs_sb_t *sbp)
++{
++	sbp->sb_versionnum |= XFS_SB_VERSION_MOREBITSBIT;
++	sbp->sb_features2 |= XFS_SB_VERSION2_PROJID32BIT;
++	sbp->sb_bad_features2 |= XFS_SB_VERSION2_PROJID32BIT;
++}
++
+ /*
+  * end of superblock version macros
+  */
+Index: xfsprogs-3.1.1/include/xfs_types.h
+===================================================================
+--- xfsprogs-3.1.1.orig/include/xfs_types.h
++++ xfsprogs-3.1.1/include/xfs_types.h
+@@ -81,8 +81,6 @@ typedef	__int32_t	xfs_tid_t;	/* transact
+ typedef	__uint32_t	xfs_dablk_t;	/* dir/attr block number (in file) */
+ typedef	__uint32_t	xfs_dahash_t;	/* dir/attr hash value */
+ 
+-typedef __uint16_t	xfs_prid_t;	/* prid_t truncated to 16bits in XFS */
+-
+ /*
+  * These types are 64 bits on disk but are either 32 or 64 bits in memory.
+  * Disk based types:
+Index: xfsprogs-3.1.1/libxfs/util.c
+===================================================================
+--- xfsprogs-3.1.1.orig/libxfs/util.c
++++ xfsprogs-3.1.1/libxfs/util.c
+@@ -134,7 +134,7 @@ libxfs_iread(
+ 	 * made it 32 bits long.  If this is an old format inode,
+ 	 * convert it in memory to look like a new one.  If it gets
+ 	 * flushed to disk we will convert back before flushing or
+-	 * logging it.  We zero out the new projid field and the old link
++	 * logging it.  We zero out the new projid_lo/hi field and the old link
+ 	 * count field.  We'll handle clearing the pad field (the remains
+ 	 * of the old uuid field) when we actually convert the inode to
+ 	 * the new format. We don't change the version number so that we
+@@ -143,7 +143,7 @@ libxfs_iread(
+ 	if (ip->i_d.di_version == XFS_DINODE_VERSION_1) {
+ 		ip->i_d.di_nlink = ip->i_d.di_onlink;
+ 		ip->i_d.di_onlink = 0;
+-		ip->i_d.di_projid = 0;
++		xfs_set_projid(&ip->i_d, 0);
+ 	}
+ 
+ 	ip->i_delayed_blks = 0;
+@@ -219,7 +219,7 @@ libxfs_ialloc(
+ 	ASSERT(ip->i_d.di_nlink == nlink);
+ 	ip->i_d.di_uid = cr->cr_uid;
+ 	ip->i_d.di_gid = cr->cr_gid;
+-	ip->i_d.di_projid = pip ? 0 : fsx->fsx_projid;
++	xfs_set_projid(&ip->i_d, pip ? 0 : fsx->fsx_projid);
+ 	memset(&(ip->i_d.di_pad[0]), 0, sizeof(ip->i_d.di_pad));
+ 
+ 	/*
+@@ -231,7 +231,10 @@ libxfs_ialloc(
+ 	if (xfs_sb_version_hasnlink(&tp->t_mountp->m_sb) &&
+ 	    ip->i_d.di_version == XFS_DINODE_VERSION_1) {
+ 		ip->i_d.di_version = XFS_DINODE_VERSION_2;
+-		/* old link count, projid field, pad field already zeroed */
++		/*
++		 * old link count, projid_lo/hi field, pad field
++		 * already zeroed
++		 */
+ 	}
+ 
+ 	if (pip && (pip->i_d.di_mode & S_ISGID)) {
+@@ -446,7 +449,7 @@ libxfs_iflush_int(xfs_inode_t *ip, xfs_b
+ 			memset(&(ip->i_d.di_pad[0]), 0, sizeof(ip->i_d.di_pad));
+ 			memset(&(dip->di_core.di_pad[0]), 0,
+ 			      sizeof(dip->di_core.di_pad));
+-			ASSERT(ip->i_d.di_projid == 0);
++			ASSERT(xfs_get_projid(ip->i_d) == 0);
+ 		}
+ 	}
+ 
+Index: xfsprogs-3.1.1/libxfs/xfs_ialloc.c
+===================================================================
+--- xfsprogs-3.1.1.orig/libxfs/xfs_ialloc.c
++++ xfsprogs-3.1.1/libxfs/xfs_ialloc.c
+@@ -46,7 +46,8 @@ xfs_ialloc_log_di(
+ 		offsetof(xfs_dinode_core_t, di_uid),
+ 		offsetof(xfs_dinode_core_t, di_gid),
+ 		offsetof(xfs_dinode_core_t, di_nlink),
+-		offsetof(xfs_dinode_core_t, di_projid),
++		offsetof(xfs_dinode_core_t, di_projid_lo),
++		offsetof(xfs_dinode_core_t, di_projid_hi),
+ 		offsetof(xfs_dinode_core_t, di_pad),
+ 		offsetof(xfs_dinode_core_t, di_atime),
+ 		offsetof(xfs_dinode_core_t, di_mtime),
+Index: xfsprogs-3.1.1/libxfs/xfs_inode.c
+===================================================================
+--- xfsprogs-3.1.1.orig/libxfs/xfs_inode.c
++++ xfsprogs-3.1.1/libxfs/xfs_inode.c
+@@ -589,7 +589,8 @@ xfs_dinode_from_disk(
+ 	to->di_uid = be32_to_cpu(from->di_uid);
+ 	to->di_gid = be32_to_cpu(from->di_gid);
+ 	to->di_nlink = be32_to_cpu(from->di_nlink);
+-	to->di_projid = be16_to_cpu(from->di_projid);
++	to->di_projid_lo = be16_to_cpu(from->di_projid_lo);
++	to->di_projid_hi = be16_to_cpu(from->di_projid_hi);
+ 	memcpy(to->di_pad, from->di_pad, sizeof(to->di_pad));
+ 	to->di_flushiter = be16_to_cpu(from->di_flushiter);
+ 	to->di_atime.t_sec = be32_to_cpu(from->di_atime.t_sec);
+@@ -624,7 +625,8 @@ xfs_dinode_to_disk(
+ 	to->di_uid = cpu_to_be32(from->di_uid);
+ 	to->di_gid = cpu_to_be32(from->di_gid);
+ 	to->di_nlink = cpu_to_be32(from->di_nlink);
+-	to->di_projid = cpu_to_be16(from->di_projid);
++	to->di_projid_lo = cpu_to_be16(from->di_projid_lo);
++	to->di_projid_hi = cpu_to_be16(from->di_projid_hi);
+ 	memcpy(to->di_pad, from->di_pad, sizeof(to->di_pad));
+ 	to->di_flushiter = cpu_to_be16(from->di_flushiter);
+ 	to->di_atime.t_sec = cpu_to_be32(from->di_atime.t_sec);
+Index: xfsprogs-3.1.1/logprint/log_print_all.c
+===================================================================
+--- xfsprogs-3.1.1.orig/logprint/log_print_all.c
++++ xfsprogs-3.1.1/logprint/log_print_all.c
+@@ -238,8 +238,8 @@ xlog_recover_print_inode_core(
+ 	     "onlink:%d\n"),
+ 	       (di->di_magic>>8) & 0xff, di->di_magic & 0xff,
+ 	       di->di_mode, di->di_version, di->di_format, di->di_onlink);
+-	printf(_("		uid:%d  gid:%d  nlink:%d projid:%d\n"),
+-	       di->di_uid, di->di_gid, di->di_nlink, (uint)di->di_projid);
++	printf(_("		uid:%d  gid:%d  nlink:%d projid:%u\n"),
++	       di->di_uid, di->di_gid, di->di_nlink, xfs_get_projid(*di));
+ 	printf(_("		atime:%d  mtime:%d  ctime:%d\n"),
+ 	       di->di_atime.t_sec, di->di_mtime.t_sec, di->di_ctime.t_sec);
+ 	printf(_("		flushiter:%d\n"), di->di_flushiter);
+Index: xfsprogs-3.1.1/man/man3/xfsctl.3
+===================================================================
+--- xfsprogs-3.1.1.orig/man/man3/xfsctl.3
++++ xfsprogs-3.1.1/man/man3/xfsctl.3
+@@ -546,8 +546,10 @@ The structure has the following elements
+ (number of extents),
+ .B bs_gen
+ (generation count),
+-.B bs_projid
+-(project id),
++.B bs_projid_lo
++(project id - low word),
++.B bs_projid_hi
++(project id - high word, used when projid32bit feature is enabled),
+ .B bs_dmevmask
+ (DMIG event mask),
+ .B bs_dmstate
+Index: xfsprogs-3.1.1/man/man8/mkfs.xfs.8
+===================================================================
+--- xfsprogs-3.1.1.orig/man/man8/mkfs.xfs.8
++++ xfsprogs-3.1.1/man/man8/mkfs.xfs.8
+@@ -350,6 +350,12 @@ between attribute and extent data.
+ The previous version 1, which has fixed regions for attribute and
+ extent data, is kept for backwards compatibility with kernels older
+ than version 2.6.16.
++.TP
++.BI projid32bit[= value ]
++This is used to enable 32bit quota project identifiers. The
++.I value
++is either 0 or 1, with 1 signifying that 32bit projid are to be enabled.
++If the value is omitted, 0 is assumed.
+ .RE
+ .TP
+ .BI \-l " log_section_options"
+Index: xfsprogs-3.1.1/man/man8/xfs_admin.8
+===================================================================
+--- xfsprogs-3.1.1.orig/man/man8/xfs_admin.8
++++ xfsprogs-3.1.1/man/man8/xfs_admin.8
+@@ -4,7 +4,7 @@ xfs_admin \- change parameters of an XFS
+ .SH SYNOPSIS
+ .B xfs_admin
+ [
+-.B \-eflu
++.B \-eflpu
+ ] [
+ .BR "\-c 0" | 1
+ ] [
+@@ -52,6 +52,9 @@ log buffers).
+ .B \-l
+ Print the current filesystem label.
+ .TP
++.B \-p
++Enable 32bit project identifier support (PROJID32BIT feature).
++.TP
+ .B \-u
+ Print the current filesystem UUID (Universally Unique IDentifier).
+ .TP
+Index: xfsprogs-3.1.1/man/man8/xfs_db.8
+===================================================================
+--- xfsprogs-3.1.1.orig/man/man8/xfs_db.8
++++ xfsprogs-3.1.1/man/man8/xfs_db.8
+@@ -1474,8 +1474,10 @@ number of links to the file in a version
+ .B nlinkv2
+ number of links to the file in a version 2 inode.
+ .TP
+-.B projid
+-owner's project id (version 2 inode only).
++.B projid_lo
++owner's project id (low word; version 2 inode only).
++.B projid_hi
++owner's project id (high word; version 2 inode only).
+ .TP
+ .B uid
+ owner's user id.
+Index: xfsprogs-3.1.1/mkfs/xfs_mkfs.c
+===================================================================
+--- xfsprogs-3.1.1.orig/mkfs/xfs_mkfs.c
++++ xfsprogs-3.1.1/mkfs/xfs_mkfs.c
+@@ -107,6 +107,8 @@ char	*iopts[] = {
+ 	"size",
+ #define	I_ATTR		5
+ 	"attr",
++#define	I_PROJID32BIT	6
++	"projid32bit",
+ 	NULL
+ };
+ 
+@@ -861,6 +863,7 @@ main(
+ 	__uint64_t		agsize;
+ 	xfs_alloc_rec_t		*arec;
+ 	int			attrversion;
++	int			projid32bit;
+ 	struct xfs_btree_block	*block;
+ 	int			blflag;
+ 	int			blocklog;
+@@ -955,6 +958,7 @@ main(
+ 	textdomain(PACKAGE);
+ 
+ 	attrversion = 2;
++	projid32bit = 0;
+ 	blflag = bsflag = slflag = ssflag = lslflag = lssflag = 0;
+ 	blocklog = blocksize = 0;
+ 	sectorlog = lsectorlog = XFS_MIN_SECTORSIZE_LOG;
+@@ -1291,6 +1295,14 @@ main(
+ 						illegal(value, "i attr");
+ 					attrversion = c;
+ 					break;
++				case I_PROJID32BIT:
++					if (!value)
++						value = "0";
++					c = atoi(value);
++					if (c < 0 || c > 1)
++						illegal(value, "i projid32bit");
++					projid32bit = c;
++					break;
+ 				default:
+ 					unknown('i', value);
+ 				}
+@@ -2321,7 +2333,7 @@ an AG size that is one stripe unit small
+ 	if (!qflag || Nflag) {
+ 		printf(_(
+ 		   "meta-data=%-22s isize=%-6d agcount=%lld, agsize=%lld blks\n"
+-		   "         =%-22s sectsz=%-5u attr=%u\n"
++		   "         =%-22s sectsz=%-5u attr=%u, projid32bit=%u\n"
+ 		   "data     =%-22s bsize=%-6u blocks=%llu, imaxpct=%u\n"
+ 		   "         =%-22s sunit=%-6u swidth=%u blks\n"
+ 		   "naming   =version %-14u bsize=%-6u ascii-ci=%d\n"
+@@ -2329,7 +2341,7 @@ an AG size that is one stripe unit small
+ 		   "         =%-22s sectsz=%-5u sunit=%d blks, lazy-count=%d\n"
+ 		   "realtime =%-22s extsz=%-6d blocks=%lld, rtextents=%lld\n"),
+ 			dfile, isize, (long long)agcount, (long long)agsize,
+-			"", sectorsize, attrversion,
++			"", sectorsize, attrversion, projid32bit,
+ 			"", blocksize, (long long)dblocks, imaxpct,
+ 			"", dsunit, dswidth,
+ 			dirversion, dirblocksize, nci,
+@@ -2396,7 +2408,7 @@ an AG size that is one stripe unit small
+ 		sbp->sb_logsectsize = 0;
+ 	}
+ 	sbp->sb_features2 = XFS_SB_VERSION2_MKFS(lazy_sb_counters,
+-					attrversion == 2, 0);
++					attrversion == 2, projid32bit == 1, 0);
+ 	sbp->sb_versionnum = XFS_SB_VERSION_MKFS(iaflag, dsunit != 0,
+ 					logversion == 2, attrversion == 1,
+ 					(sectorsize != BBSIZE ||
+@@ -2864,7 +2876,8 @@ usage( void )
+ /* data subvol */	[-d agcount=n,agsize=n,file,name=xxx,size=num,\n\
+ 			    (sunit=value,swidth=value|su=num,sw=num),\n\
+ 			    sectlog=n|sectsize=num\n\
+-/* inode size */	[-i log=n|perblock=n|size=num,maxpct=n,attr=0|1|2]\n\
++/* inode size */	[-i log=n|perblock=n|size=num,maxpct=n,attr=0|1|2,\n\
++			    projid32bit=0|1]\n\
+ /* log subvol */	[-l agnum=n,internal,size=num,logdev=xxx,version=n\n\
+ 			    sunit=value|su=num,sectlog=n|sectsize=num,\n\
+ 			    lazy-count=0|1]\n\
+Index: xfsprogs-3.1.1/mkfs/xfs_mkfs.h
+===================================================================
+--- xfsprogs-3.1.1.orig/mkfs/xfs_mkfs.h
++++ xfsprogs-3.1.1/mkfs/xfs_mkfs.h
+@@ -36,9 +36,10 @@
+ 	        XFS_DFL_SB_VERSION_BITS |                               \
+ 	0 ) : XFS_SB_VERSION_1 )
+ 
+-#define XFS_SB_VERSION2_MKFS(lazycount, attr2, parent) (\
++#define XFS_SB_VERSION2_MKFS(lazycount, attr2, projid32bit, parent) (\
+ 	((lazycount) ? XFS_SB_VERSION2_LAZYSBCOUNTBIT : 0) |		\
+ 	((attr2) ? XFS_SB_VERSION2_ATTR2BIT : 0) |			\
++	((projid32bit) ? XFS_SB_VERSION2_PROJID32BIT : 0) |		\
+ 	((parent) ? XFS_SB_VERSION2_PARENTBIT : 0) |			\
+ 	0 )
+ 
+Index: xfsprogs-3.1.1/quota/quot.c
+===================================================================
+--- xfsprogs-3.1.1.orig/quota/quot.c
++++ xfsprogs-3.1.1/quota/quot.c
+@@ -102,7 +102,7 @@ quot_bulkstat_add(
+ 	}
+ 	for (i = 0; i < 3; i++) {
+ 		id = (i == 0) ? p->bs_uid : ((i == 1) ?
+-				p->bs_gid : p->bs_projid);
++			p->bs_gid : bstat_get_projid(p));
+ 		hp = &duhash[i][id % DUHASH];
+ 		for (dp = *hp; dp; dp = dp->next)
+ 			if (dp->id == id)
+Index: xfsprogs-3.1.1/repair/README
+===================================================================
+--- xfsprogs-3.1.1.orig/repair/README
++++ xfsprogs-3.1.1/repair/README
+@@ -130,7 +130,7 @@ D - 0)	rewrite directory leaf block hole
+ 	it does describe doesn't conflict with reality.
+ 
+ D - 0)	rewrite setting nlinks handling -- for version 1
+-	inodes, set both nlinks and onlinks (zero projid
++	inodes, set both nlinks and onlinks (zero projid_lo/hi
+ 	and pad) if we have to change anything.  For
+ 	version 2, I think we're ok.
+ 

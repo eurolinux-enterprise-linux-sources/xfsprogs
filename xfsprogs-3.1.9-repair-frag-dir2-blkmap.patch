@@ -1,0 +1,35 @@
+commit b220548bf2e51f4a573b19b4a8b4b15856bd4a06
+Author: Eric Sandeen <sandeen@redhat.com>
+Date:   Tue Jun 5 13:24:55 2012 -0500
+
+    xfs_repair: Fix fragmented multiblock dir2 handling in blkmap_getn()
+    
+    blkmap_getn() contains a loop which populates an array of extents
+    with mapping information for a dir2 "block," which may consist
+    of multiple filesystem blocks.
+    
+    As written, the loop re-allocates the array for each new extent,
+    leaking the previously allocated memory and worse, losing the
+    previously filled-in extent information.
+    
+    Fix this by only allocating the array once, for the maximum
+    possible number of extents - the number of fs blocks in the dir
+    block.
+    
+    Signed-off-by: Eric Sandeen <sandeen@redhat.com>
+    Reviewed-by: Ben Myers <bpm@sgi.com>
+
+Index: xfsprogs-3.1.1/repair/bmap.c
+===================================================================
+--- xfsprogs-3.1.1.orig/repair/bmap.c
++++ xfsprogs-3.1.1/repair/bmap.c
+@@ -139,7 +139,8 @@ blkmap_getn(
+ 		/*
+ 		 * rare case - multiple extents for a single dir block
+ 		 */
+-		bmp = malloc(nb * sizeof(bmap_ext_t));
++		if (!bmp)
++			bmp = malloc(nb * sizeof(bmap_ext_t));
+ 		if (!bmp)
+ 			do_error(_("blkmap_getn malloc failed (%u bytes)\n"),
+ 						nb * sizeof(bmap_ext_t));

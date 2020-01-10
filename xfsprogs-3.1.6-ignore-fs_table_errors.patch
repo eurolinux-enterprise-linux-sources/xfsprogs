@@ -1,0 +1,118 @@
+commit 6bca0145b76e15344af86441c04f7942f398317e
+Author: Alex Elder <aelder@sgi.com>
+Date:   Mon Oct 3 12:49:20 2011 +0000
+
+    xfsprogs: libxcmd: ignore errors when initializing fs_table
+    
+    When initializing fs_table, the full set of mounted filesystems and
+    the full set of defined projects are (or may be) examined.  If an
+    error ever occurs looking at one of these entries, the processing
+    loop just quits, skipping all remaining mounts or projects.
+    
+    One mount or project being problematic is no reason to give
+    up entirely.  It may be that it is completely unrelated to
+    the mount point or project that the user wants to operate on.
+    
+    So instead of quitting when an error occurs while adding
+    something to fs_table, proceed until all entries are added.
+    
+    Meanwhile, the two affected functions are used for either
+    installing one entry in the table or for initializing the
+    table based on the full set of mounts or projects.  In
+    the former case, once the entry matching that was requested
+    has been found there is no need to continue searching for
+    other entries, so break out of the loop immediately in
+    that case.
+    
+    It so happens that these two changes affect the exact
+    same portion of the code...
+    
+    SGI PV 1017024
+    
+    Signed-off-by: Alex Elder <aelder@sgi.com>
+    Reviewed-by: Christoph Hellwig <hch@lst.de>
+
+Index: xfsprogs-3.1.1/libxcmd/paths.c
+===================================================================
+--- xfsprogs-3.1.1.orig/libxcmd/paths.c
++++ xfsprogs-3.1.1/libxcmd/paths.c
+@@ -209,7 +209,6 @@ fs_table_initialise_mounts(
+ 		    ((strcmp(path, mnt->mnt_dir) != 0) &&
+ 		     (strcmp(path, mnt->mnt_fsname) != 0)))
+ 			continue;
+-		found = 1;
+ 		dir = strdup(mnt->mnt_dir);
+ 		fsname = strdup(mnt->mnt_fsname);
+ 		if (!dir || !fsname) {
+@@ -217,12 +216,15 @@ fs_table_initialise_mounts(
+ 			break;
+ 		}
+ 		fs_extract_mount_options(mnt, &fslog, &fsrt);
+-		if ((error = fs_table_insert(dir, 0, FS_MOUNT_POINT,
+-						fsname, fslog, fsrt)))
++		(void) fs_table_insert(dir, 0, FS_MOUNT_POINT,
++						fsname, fslog, fsrt);
++		if (path) {
++			found = 1;
+ 			break;
++		}
+ 	}
+ 	endmntent(mtp);
+-	if (!error && path && !found)
++	if (path && !found)
+ 		error = ENXIO;
+ 	if (error) {
+ 		if (dir) free(dir);
+@@ -260,7 +262,6 @@ fs_table_initialise_mounts(
+ 		    ((strcmp(path, stats[i].f_mntonname) != 0) &&
+ 		     (strcmp(path, stats[i].f_mntfromname) != 0)))
+ 			continue;
+-		found = 1;
+ 		dir = strdup(stats[i].f_mntonname);
+ 		fsname = strdup(stats[i].f_mntfromname);
+ 		if (!dir || !fsname) {
+@@ -268,11 +269,14 @@ fs_table_initialise_mounts(
+ 			break;
+ 		}
+ 		/* TODO: external log and realtime device? */
+-		if ((error = fs_table_insert(dir, 0, FS_MOUNT_POINT,
+-						fsname, fslog, fsrt)))
++		(void) fs_table_insert(dir, 0, FS_MOUNT_POINT,
++						fsname, fslog, fsrt);
++		if (path) {
++			found = 1;
+ 			break;
++		}
+ 	}
+-	if (!error && path && !found)
++	if (path && !found)
+ 		error = ENXIO;
+ 	if (error) {
+ 		if (dir) free(dir);
+@@ -332,20 +336,22 @@ fs_table_initialise_projects(
+ 					progname, path->pp_pathname, strerror(errno));
+ 			continue;
+ 		}
+-		found = 1;
+ 		dir = strdup(path->pp_pathname);
+ 		fsname = strdup(fs->fs_name);
+ 		if (!dir || !fsname) {
+ 			error = ENOMEM;
+ 			break;
+ 		}
+-		if ((error = fs_table_insert(dir, path->pp_prid,
+-					FS_PROJECT_PATH, fsname, NULL, NULL)))
++		(void) fs_table_insert(dir, path->pp_prid,
++					FS_PROJECT_PATH, fsname, NULL, NULL);
++		if (project) {
++			found = 1;
+ 			break;
++		}
+ 	}
+ 	endprpathent();
+ 
+-	if (!error && project && !found)
++	if (project && !found)
+ 		error = ENOENT;
+ 	if (error) {
+ 		if (dir) free(dir);

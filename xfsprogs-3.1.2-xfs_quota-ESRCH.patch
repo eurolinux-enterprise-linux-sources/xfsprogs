@@ -1,0 +1,39 @@
+commit e127d47bf2b816d1d9b8583d6f429b351e41176f
+Author: Eric Sandeen <sandeen@sandeen.net>
+Date:   Mon Feb 21 12:12:50 2011 -0600
+
+    xfs_quota: don't try to report quotas which aren't there.
+    
+    Red Hat bug #669333 - xfs_quota generates "XFS_GETQUOTA: No such process" errors
+    shows that if you do this for a filesystem w/o group quota enabled:
+    
+    # xfs_quota -x -c ' report -h ' /xfsquota"
+    
+    You'll get this output:
+    
+    User quota on /xfsquota (/dev/vdb)
+                            Blocks
+    User ID      Used   Soft   Hard Warn/Grace
+
+diff --git a/quota/report.c b/quota/report.c
+index 0e005c3..8653590 100644
+--- a/quota/report.c
++++ b/quota/report.c
+@@ -82,7 +82,7 @@ dump_file(
+ 	fs_disk_quota_t	d;
+ 
+ 	if (xfsquotactl(XFS_GETQUOTA, dev, type, id, (void *)&d) < 0) {
+-		if (errno != ENOENT && errno != ENOSYS)
++		if (errno != ENOENT && errno != ENOSYS && errno != ESRCH)
+ 			perror("XFS_GETQUOTA");
+ 		return;
+ 	}
+@@ -302,7 +302,7 @@ report_mount(
+ 	int		count;
+ 
+ 	if (xfsquotactl(XFS_GETQUOTA, dev, type, id, (void *)&d) < 0) {
+-		if (errno != ENOENT && errno != ENOSYS)
++		if (errno != ENOENT && errno != ENOSYS && errno != ESRCH)
+ 			perror("XFS_GETQUOTA");
+ 		return 0;
+ 	}

@@ -1,0 +1,44 @@
+commit 7c8b1f6adcbee85fd82a605d8dd980de2c0386f9
+Author: Eric Sandeen <sandeen@redhat.com>
+Date:   Mon Sep 19 21:45:06 2011 +0000
+
+    mkfs.xfs: don't increase agblocks past maximum
+    
+    RH QA discovered this bug:
+    
+    Steps to Reproduce:
+    1. Create 4 TB - 1 B partition
+        dd if=/dev/zero of=x.img bs=1 count=0 seek=4398046511103
+    2. Create xfs fs with 512 B block size on the partition
+        mkfs.xfs -b size=512 xfs.img
+    
+    Actual results:
+    Agsize is computed incorrectly resulting in fs creation fail:
+    agsize (2147483648b) too big, maximum is 2147483647 blocks
+    
+    This is due to the "rounding up" at the very end of the calculations;
+    there may be other places to alleviate the problem, but it seems
+    most obvious to simply skip the rounding up if it would create too
+    many blocks in the AG.  Worst case, we lose 1 block per AG.
+    
+    Signed-off-by: Eric Sandeen <sandeen@redhat.com>
+    Signed-off-by: Alex Elder <aelder@sgi.com>
+
+diff --git a/mkfs/xfs_mkfs.c b/mkfs/xfs_mkfs.c
+index 9a96b8f..f527f3d 100644
+--- a/mkfs/xfs_mkfs.c
++++ b/mkfs/xfs_mkfs.c
+@@ -658,8 +658,11 @@ calc_default_ag_geometry(
+ 	 * last bit of the filesystem. The same principle applies
+ 	 * to the AG count, so we don't lose the last AG!
+ 	 */
+-	blocks = (dblocks >> shift) + ((dblocks & xfs_mask32lo(shift)) != 0);
+-
++	blocks = dblocks >> shift;
++	if (dblocks & xfs_mask32lo(shift)) {
++		if (blocks < XFS_AG_MAX_BLOCKS(blocklog))
++		    blocks++;
++	}
+ done:
+ 	*agsize = blocks;
+ 	*agcount = dblocks / blocks + (dblocks % blocks != 0);

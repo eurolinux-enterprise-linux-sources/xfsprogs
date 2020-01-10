@@ -1,0 +1,91 @@
+commit 1affe13718816b3404b555b761dfe35660731cc9
+Author: Alex Elder <aelder@sgi.com>
+Date:   Wed Aug 24 21:53:41 2011 +0000
+
+    xfsprogs: xfs_quota: return real-time used data as intended
+    
+    In projects_free_space_data() the real-time used space consumption
+    is never set.  Instead, that value is returned in the field that
+    should hold the quota limit.
+    
+    Found by inspection.  Never seen/noticed because we currently don't
+    support quotas when a filesystem has a realtime volume.
+    
+    Signed-off-by: Alex Elder <aelder@sgi.com>
+    Reviewed-by: Christoph Hellwig <hch@lst.de>
+
+commit 7cb2d41b091468e197d3694e9cec5a1140122a05
+Author: Alex Elder <aelder@sgi.com>
+Date:   Wed Aug 24 21:53:42 2011 +0000
+
+    xfsprogs: xfs_quota: don't double project block counts
+
+    In projects_free_space_data() all of the block counts returned are
+    doubled.  This was probably a mistaken attempt to convert to or from
+    512-byte basic block units.  The caller expects the value returned
+    to be in 512-byte units, which is exactly what the fs_disk_quota
+    structure holds, so there should be no doubling.
+
+    The effect of this bug is that the disk space used by the "df"
+    xfs_quota command shows block counts twice what they should be.
+
+    SGI PV 1015651
+
+    Signed-off-by: Alex Elder <aelder@sgi.com>
+    Reviewed-by: Christoph Hellwig <hch@lst.de>
+
+Index: xfsprogs-3.1.1/quota/free.c
+===================================================================
+--- xfsprogs-3.1.1.orig/quota/free.c
++++ xfsprogs-3.1.1/quota/free.c
+@@ -41,6 +41,10 @@ free_help(void)
+ "\n"));
+ }
+ 
++/*
++ * The data and realtime block counts returned (count, used, and
++ * free) are all in basic block units.
++ */
+ static int
+ mount_free_space_data(
+ 	struct fs_path		*mount,
+@@ -104,6 +108,10 @@ mount_free_space_data(
+ 	return 1;
+ }
+ 
++/*
++ * The data and realtime block counts returned (count, used, and
++ * free) are all in basic block units.
++ */
+ static int
+ projects_free_space_data(
+ 	struct fs_path		*path,
+@@ -173,20 +181,22 @@ projects_free_space_data(
+ 	}
+ 
+ 	if (d.d_blk_softlimit) {
+-		*bcount = d.d_blk_softlimit << 1;
+-		*bfree = (d.d_blk_softlimit - d.d_bcount) << 1;
++		*bcount = d.d_blk_softlimit;
++		*bfree = (d.d_blk_softlimit - d.d_bcount);
+ 	}
+-	*bused = d.d_bcount << 1;
++	*bused = d.d_bcount;
++
+ 	if (d.d_ino_softlimit) {
+ 		*icount = d.d_ino_softlimit;
+ 		*ifree = (d.d_ino_softlimit - d.d_icount);
+ 	}
+ 	*iused = d.d_icount;
++
+ 	if (d.d_rtb_softlimit) {
+-		*rcount = d.d_rtb_softlimit << 1;
+-		*rfree = (d.d_rtb_softlimit - d.d_rtbcount) << 1;
++		*rcount = d.d_rtb_softlimit;
++		*rfree = (d.d_rtb_softlimit - d.d_rtbcount);
+ 	}
+-	*rcount = d.d_rtbcount << 1;
++	*rused = d.d_rtbcount;
+ 
+ 	close(fd);
+ 	return 1;
