@@ -1,7 +1,7 @@
 Summary:	Utilities for managing the XFS filesystem
 Name:		xfsprogs
 Version:	3.1.1
-Release:	10%{?dist}.1
+Release:	14%{?dist}
 # Licensing based on generic "GNU GENERAL PUBLIC LICENSE"
 # in source, with no mention of version.
 # doc/COPYING file specifies what is GPL and what is LGPL
@@ -37,8 +37,17 @@ Patch15:	xfsprogs-3.1.1-projid32bit.patch
 Patch16:	xfsprogs-3.1.1-projid32flag.patch
 Patch17:	xfsprogs-3.1.1-validatestring.patch
 Patch18:	xfsprogs-3.1.11-multidisk-mode.patch
-Patch19:	xfsprogs-3.1.9-repair-frag-dir2-leaf.patch
-Patch20:	xfsprogs-3.1.9-repair-frag-dir2-blkmap.patch
+Patch19:	xfsprogs-3.1.11-logprint-multilog.patch
+Patch20:	xfsprogs-3.1.11-io-remove-setfl.patch
+Patch21:	xfsprogs-3.1.11-io-manpage.patch
+Patch22:	xfsprogs-3.1.9-repair-frag-dir2-leaf.patch
+Patch23:	xfsprogs-3.1.9-repair-frag-dir2-blkmap.patch
+Patch24:	xfsprogs-3.1.8-repair-thread-local-data.patch
+Patch25:	xfsprogs-3.1.11-mkfs-manpage.patch
+Patch26:	xfsprogs-3.1.18-repair-unlinked-walk.patch
+Patch27:	xfsprogs-3.1.1-logprint-continuation.patch
+Patch28:	xfsprogs-3.1.1-logprint-fix-continuation.patch
+Patch29:	xfsprogs-3.1.1-logprint-fix-wrapped-log.patch
 
 %description
 A set of commands to use the XFS filesystem, including mkfs.xfs.
@@ -104,6 +113,15 @@ in building or running the xfstests QA suite.
 %patch18 -p1
 %patch19 -p1
 %patch20 -p1
+%patch21 -p1
+%patch22 -p1
+%patch23 -p1
+%patch24 -p1
+%patch25 -p1
+%patch26 -p1
+%patch27 -p1
+%patch28 -p1
+%patch29 -p1
 
 %build
 export tagname=CC DEBUG=-DNDEBUG
@@ -230,9 +248,22 @@ rm -rf $RPM_BUILD_ROOT
 %{_includedir}/xfs/xfs_types.h
 
 %changelog
-* Wed Jun 19 2013 Eric Sandeen <sandeen@redhat.com> 3.1.1-10.1
-- mkfs.xfs: Use multidisk mode when geometry is on cmdline (#971698)
-- xfs_repair: Handle fragmented multiblock dir2 directories (#976217)
+* Fri Aug 30 2013 Eric Sandeen <sandeen@redhat.com> 3.1.1-14
+- xfs_logprint: More fixes for continuations & log wraps  (#1002908)
+
+* Wed Jul 24 2013 Eric Sandeen <sandeen@redhat.com> 3.1.1-13
+- xfs_repair: do not walk the unlinked inode list (#950691)
+
+* Wed Jul 24 2013 Eric Sandeen <sandeen@redhat.com> 3.1.1-12
+- mkfs.xfs: Document "noalign" option in mkfs.xfs manpage (#987538)
+
+* Fri May 17 2013 Eric Sandeen <sandeen@redhat.com> 3.1.1-11
+- mkfs.xfs: Use multidisk mode when geometry is on cmdline (#961501)
+- xfs_io: Update  man page to include chproj, lsproj (#962394)
+- xfs_io: Remove broken setfl command (#962394)
+- xfs_logprint: Handle multiply-logged fields (#962397)
+- xfs_repair: Handle fragmented multiblock dir2 directories (#964216)
+- xfs_repair: avoid segfault with ag_stride (#93904)
 
 * Wed Nov 28 2012 Eric Sandeen <sandeen@redhat.com> 3.1.1-10
 - Validate string -> number conversion (#878859)

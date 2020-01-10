@@ -1,0 +1,68 @@
+commit 83c324088f8e60133016409752b08f74e19e8b37
+Author: Eric Sandeen <sandeen@sandeen.net>
+Date:   Sat Dec 8 20:55:18 2012 +0000
+
+    xfsprogs: document all commands in xfs_io
+    
+    Add missing command documentation to xfs_io(8) manpage.
+    fiemap, fpunch, chproj, lsproj, and setfl are all missing.
+
+RHEL6: no fiemap or fpunch
+    
+    setfl seems to not work today in any case, and nothing
+    in xfstests uses it; I will send another patch to simply
+    remove it from xfs_io, as I don't think it's terribly useful,
+    and hasn't worked forever anyway.
+    
+    Also fix references to the fallocate manpage, which is (now?)
+    in section 2, not section 3 of the man pages.  (Since it's
+    a syscall, not a library function).
+    
+    Signed-off-by: Eric Sandeen <sandeen@sandeen.net>
+
+Index: xfsprogs-3.1.1/man/man8/xfs_io.8
+===================================================================
+--- xfsprogs-3.1.1.orig/man/man8/xfs_io.8
++++ xfsprogs-3.1.1/man/man8/xfs_io.8
+@@ -298,14 +298,14 @@ manual page.
+ .BI "falloc [ \-k ]" " offset length"
+ Allocates reserved, unwritten space for part of a file using the
+ fallocate routine as described in the
+-.BR fallocate (3)
++.BR fallocate (2)
+ manual page.
+ .RS 1.0i
+ .PD 0
+ .TP 0.4i
+ .B \-k
+ will set the FALLOC_FL_KEEP_SIZE flag as described in
+-.BR fallocate (3).
++.BR fallocate (2).
+ .PD
+ .RE
+ .TP
+@@ -518,6 +518,24 @@ Selected statistics from
+ and the XFS_IOC_FSGEOMETRY
+ system call on the filesystem where the current file resides.
+ .TP
++.BR chproj " [ " \-R | \-D " ]"
++Modifies the project identifier associated with the current path. The 
++.B \-R
++option will recursively descend if the current path is a directory. The 
++.B \-D
++option will also recursively descend, only setting modifying projects 
++on subdirectories.  See the
++.BR xfs_quota (8)
++manual page for more information about project identifiers.
++.TP
++.BR lsproj " [ " \-R | \-D " ]"
++Displays the project identifier associated with the current path. The 
++.B \-R
++and
++.B \-D
++options behave as described above, in
++.B chproj.
++.TP
+ .BR parent " [ " \-cpv " ]"
+ By default this command prints out the parent inode numbers,
+ inode generation numbers and basenames of all the hardlinks which

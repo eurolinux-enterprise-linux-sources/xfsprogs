@@ -1,0 +1,109 @@
+commit 618e842d3553d24e7ba2c740a080ab6f972868c6
+Author: Eric Sandeen <sandeen@sandeen.net>
+Date:   Sat Dec 8 21:03:10 2012 +0000
+
+    xfsprogs: remove setfl from xfs_io
+    
+    Doesn't seem to have worked for ages, and is (therefore)
+    apparently not ever used:
+    
+    xfs_io> setfl
+    xfs_io> help setfl
+    setfl [-adx] -- set/clear append/direct flags on the open file
+    xfs_io> setfl -a
+    bad argument count 1 to setfl, expected 0 arguments
+    xfs_io> setfl -d
+    bad argument count 1 to setfl, expected 0 arguments
+    xfs_io> setfl
+    xfs_io>
+    
+    At best, it seems intended to toggle the flag state, but
+    gives no feedback about current state.  -x is in help but
+    not implemented, etc.
+    
+    Just remove it.
+    
+    Signed-off-by: Eric Sandeen <sandeen@redhat.com>
+    Reviewed-by: Carlos Maiolino <cmaiolino@redhat.com>
+    Signed-off-by: Mark Tinguely <tinguely@sgi.com>
+
+Index: xfsprogs-3.1.1/io/open.c
+===================================================================
+--- xfsprogs-3.1.1.orig/io/open.c
++++ xfsprogs-3.1.1/io/open.c
+@@ -25,7 +25,6 @@
+ static cmdinfo_t open_cmd;
+ static cmdinfo_t stat_cmd;
+ static cmdinfo_t close_cmd;
+-static cmdinfo_t setfl_cmd;
+ static cmdinfo_t statfs_cmd;
+ static cmdinfo_t chproj_cmd;
+ static cmdinfo_t lsproj_cmd;
+@@ -675,45 +674,6 @@ extsize_f(
+ }
+ 
+ static int
+-setfl_f(
+-	int			argc,
+-	char			**argv)
+-{
+-	int			c, flags;
+-
+-	flags = fcntl(file->fd, F_GETFL, 0);
+-	if (flags < 0) {
+-		perror("fcntl(F_GETFL)");
+-		return 0;
+-	}
+-
+-	while ((c = getopt(argc, argv, "ad")) != EOF) {
+-		switch (c) {
+-		case 'a':
+-			if (flags & O_APPEND)
+-				flags |= O_APPEND;
+-			else
+-				flags &= ~O_APPEND;
+-			break;
+-		case 'd':
+-			if (flags & O_DIRECT)
+-				flags |= O_DIRECT;
+-			else
+-				flags &= ~O_DIRECT;
+-			break;
+-		default:
+-			printf(_("invalid setfl argument -- '%c'\n"), c);
+-			return 0;
+-		}
+-	}
+-
+-	if (fcntl(file->fd, F_SETFL, flags)  < 0)
+-		perror("fcntl(F_SETFL)");
+-
+-	return 0;
+-}
+-
+-static int
+ statfs_f(
+ 	int			argc,
+ 	char			**argv)
+@@ -798,13 +758,6 @@ open_init(void)
+ 	close_cmd.flags = CMD_NOMAP_OK | CMD_FOREIGN_OK;
+ 	close_cmd.oneline = _("close the current open file");
+ 
+-	setfl_cmd.name = _("setfl");
+-	setfl_cmd.cfunc = setfl_f;
+-	setfl_cmd.args = _("[-adx]");
+-	setfl_cmd.flags = CMD_NOMAP_OK | CMD_FOREIGN_OK;
+-	setfl_cmd.oneline =
+-		_("set/clear append/direct flags on the open file");
+-
+ 	statfs_cmd.name = _("statfs");
+ 	statfs_cmd.cfunc = statfs_f;
+ 	statfs_cmd.flags = CMD_NOMAP_OK | CMD_FOREIGN_OK;
+@@ -844,7 +797,6 @@ open_init(void)
+ 	add_command(&open_cmd);
+ 	add_command(&stat_cmd);
+ 	add_command(&close_cmd);
+-	add_command(&setfl_cmd);
+ 	add_command(&statfs_cmd);
+ 	add_command(&chproj_cmd);
+ 	add_command(&lsproj_cmd);
