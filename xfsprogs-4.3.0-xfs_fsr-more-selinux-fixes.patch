@@ -1,0 +1,101 @@
+commit e7e3152c8414796d5225543909e649cdfaacd77a
+Author: Eric Sandeen <sandeen@sandeen.net>
+Date:   Mon Nov 23 15:24:24 2015 +1100
+
+    fsr: more selinux fixes
+    
+    Commit:
+    
+    1adfe5c xfs_fsr: fix SWAPEXT failures under selinux
+    
+    attempted to fix up the fork offset under selinux, where
+    the temp file is created with a local attribute, but the
+    target file has remote attributes; this can lead to a smaller
+    data area in the temp inode, without enough room to swap extents
+    from the target inode.  I remedied this by pushing the temp
+    file attribute to remote, but *only* if the target file's attr
+    was also remote.
+    
+    However, I have a case from the field where the parent dir
+    and the target file both have a context of:
+    
+    system_u:object_r:samba_share_t:s0
+    
+    but new files created in the dir have a context of
+    
+    unconfined_u:object_r:samba_share_t:s0
+    
+    This means the temp file has a smaller forkoff, and less space
+    in the inode for data, so we fail to swap the extents between
+    the two, because they don't fit.
+    
+    The following patch fixes this by allowing xfs_fsr to
+    kick the tempfile's attr out of local format even if the target
+    file's attr is local, if this will move the forkoff in the right
+    direction.  This does pass all our fsr xfstests, though I'm not
+    sure we have any real coverage of fsr under selinux...
+    
+    The only functional change is the test at the very end of the
+    patch; the rest is comments, ascii art, and removing the
+    now-extraneous XFS_IOC_FSGETXATTRA ioctl.
+    
+    Signed-off-by: Eric Sandeen <sandeen@redhat.com>
+    Reviewed-by: Brian Foster <bfoster@redhat.com>
+    Signed-off-by: Dave Chinner <david@fromorbit.com>
+
+Index: xfsprogs-3.1.1/fsr/xfs_fsr.c
+===================================================================
+--- xfsprogs-3.1.1.orig/fsr/xfs_fsr.c
++++ xfsprogs-3.1.1/fsr/xfs_fsr.c
+@@ -1046,14 +1046,12 @@ fsr_setup_attr_fork(
+ 			}
+ 			continue;
+ 		} else if (i == 0) {
+-			struct fsxattr	fsx;
+ 			/*
+ 			 * First pass, and temp file already has an inline
+ 			 * xattr, probably due to selinux.
+ 			 *
+ 			 * It's *possible* that the temp file attr area
+-			 * is larger than the target file's, if the 
+-			 * target file's attrs are not inline:
++			 * is larger than the target file's:
+ 			 *
+ 			 *  Target		 Temp
+ 			 * +-------+ 0		+-------+ 0
+@@ -1063,28 +1061,18 @@ fsr_setup_attr_fork(
+ 			 * |	   |		v-------v forkoff
+ 			 * |	   |		|       |
+ 			 * v-------v forkoff	| Attr  | local
+-			 * | Attr  | ext/btree	|       |
++			 * | Attr  | 		|       |
+ 			 * +-------+		+-------+
+-			 *
+-			 * FSGETXATTRA will tell us nr of attr extents in
+-			 * target, if any.  If none, it's local:
+ 			 */
+ 
+-			memset(&fsx, 0, sizeof(fsx));
+-			if (ioctl(fd, XFS_IOC_FSGETXATTRA, &fsx)) {
+-				fsrprintf(_("FSGETXATTRA failed on target\n"));
+-				return -1;
+-			}
+-
+ 			/*
+-			 * If target attr area is less than the temp's (diff < 0)
+-			 * and the target is not local, write a big attr to
+-			 * the temp file to knock the attr out of local format,
+-			 * to match the target.  (This should actually *increase*
+-			 * the temp file's forkoffset when the attr moves out
+-			 * of the inode)
++			 * If target attr area is less than the temp's
++			 * (diff < 0) write a big attr to the temp file to knock
++			 * the attr out of local format.
++			 * (This should actually *increase* the temp file's
++			 * forkoffset when the attr moves out of the inode)
+ 			 */
+- 			if (diff < 0 && fsx.fsx_nextents > 0) {
++			if (diff < 0) {
+ 				char val[2048];
+ 				memset(val, 'X', 2048);
+ 				if (fsetxattr(tfd, name, val, 2048, 0)) {

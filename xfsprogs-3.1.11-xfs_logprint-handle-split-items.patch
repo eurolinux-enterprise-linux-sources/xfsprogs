@@ -1,0 +1,65 @@
+commit a223e63682bece46eda34fdb9ccb5ec243cd9e2a
+Author: Eric Sandeen <sandeen@sandeen.net>
+Date:   Mon Mar 3 12:21:49 2014 +1100
+
+    xfs_logprint: Don't error out after split items lose context
+    
+    xfs_logprint recognizes a "left over region from split log item"
+    but then expects the *next* op to be a valid start to a new
+    item.  The problem is, we can split i.e. an xfs_inode_log_format
+    item, skip over it, and then land on the xfs_icdinode_t
+    data which follows it - this doesn't have a valid log item
+    magic (XFS_LI_*) and we error out.  This results in something
+    like:
+    
+      xfs_logprint: unknown log operation type (494e)
+    
+    Fix this by recognizing that we've skipped over an item and
+    lost the context we're in, so just continue skipping over
+    op headers until we find the next valid start to a log item.
+    
+    Signed-off-by: Eric Sandeen <sandeen@redhat.com>
+    Reviewed-by: Dave Chinner <dchinner@redhat.com>
+    Signed-off-by: Dave Chinner <david@fromorbit.com>
+
+Index: xfsprogs-3.1.1/logprint/log_misc.c
+===================================================================
+--- xfsprogs-3.1.1.orig/logprint/log_misc.c
++++ xfsprogs-3.1.1/logprint/log_misc.c
+@@ -835,7 +835,7 @@ xlog_print_record(int			  fd,
+ 		 int			  bad_hdr_warn)
+ {
+     xfs_caddr_t		buf, ptr;
+-    int			read_len, skip;
++    int			read_len, skip, lost_context = 0;
+     int			ret, n, i, j, k;
+ 
+     if (print_no_print)
+@@ -956,7 +956,10 @@ xlog_print_record(int			  fd,
+ 	if (xlog_print_find_tid(be32_to_cpu(op_head->oh_tid),
+ 				op_head->oh_flags & XLOG_WAS_CONT_TRANS)) {
+ 	    printf(_("Left over region from split log item\n"));
++	    /* Skip this leftover bit */
+ 	    ptr += be32_to_cpu(op_head->oh_len);
++	    /* We've lost context; don't complain if next one looks bad too */
++	    lost_context = 1;
+ 	    continue;
+ 	}
+ 
+@@ -1005,7 +1008,7 @@ xlog_print_record(int			  fd,
+ 			break;
+ 		    }
+ 		    default: {
+-			if (bad_hdr_warn) {
++			if (bad_hdr_warn && !lost_context) {
+ 				fprintf(stderr,
+ 			_("%s: unknown log operation type (%x)\n"),
+ 					progname, *(unsigned short *)ptr);
+@@ -1019,6 +1022,7 @@ xlog_print_record(int			  fd,
+ 			}
+ 			skip = 0;
+ 			ptr += be32_to_cpu(op_head->oh_len);
++			lost_context = 0;
+ 		    }
+ 		} /* switch */
+ 	    } /* else */

@@ -1,7 +1,7 @@
 Summary:	Utilities for managing the XFS filesystem
 Name:		xfsprogs
 Version:	3.1.1
-Release:	19%{?dist}
+Release:	20%{?dist}
 # Licensing based on generic "GNU GENERAL PUBLIC LICENSE"
 # in source, with no mention of version.
 # doc/COPYING file specifies what is GPL and what is LGPL
@@ -60,6 +60,9 @@ Patch38:	xfsprogs-3.1.8-xfs_io-deprecate-F.patch
 Patch39:	xfsprogs-3.1.8-xfs_io-allow-F-open.patch
 Patch40:	xfsprogs-3.2.2-xfs_repair-sunit-backup-sb.patch
 Patch41:	xfsprogs-3.1.1-skip-FSGEOMETRY.patch
+Patch42:	xfsprogs-3.1.11-xfs_logprint-handle-split-items.patch
+Patch43:	xfsprogs-4.3.0-xfs_fsr-more-selinux-fixes.patch
+Patch44:	xfsprogs-3.2.3-xfs_repair-reserved-attrs.patch
 
 %description
 A set of commands to use the XFS filesystem, including mkfs.xfs.
@@ -146,6 +149,9 @@ in building or running the xfstests QA suite.
 %patch39 -p1
 %patch40 -p1
 %patch41 -p1
+%patch42 -p1
+%patch43 -p1
+%patch44 -p1
 
 %build
 export tagname=CC DEBUG=-DNDEBUG
@@ -272,6 +278,11 @@ rm -rf $RPM_BUILD_ROOT
 %{_includedir}/xfs/xfs_types.h
 
 %changelog
+* Mon Aug 29 2016 Eric Sandeen <sandeen@redhat.com> 3.1.1-20
+- xfs_logprint: Fix some inode logging corner cases (#1027075)
+- xfs_fsr: Fix more selinux-related failures (#1225651)
+- xfs_repair: Detect reserved attribute names (#1304285)
+
 * Thu Feb 25 2016 Eric Sandeen <sandeen@redhat.com> 3.1.1-19
 - xfs_io: skip FSGEOMETRY call in openfile if no geom var present (#1303655)
 
