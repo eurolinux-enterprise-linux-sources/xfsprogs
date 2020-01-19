@@ -1,0 +1,52 @@
+xfs.h: define XFS_IOC_FREEZE even if FIFREEZE is defined
+
+And the same for XFS_IOC_THAW.  Just because we now have a common
+version of the ioctl we still need to provide the old name for it
+for anyone using those.
+
+Signed-off-by: Christoph Hellwig <hch@lst.de>
+
+linux.h: include <linux/fs.h>
+
+To reliably prevent the redefinition of struct fsxattr.
+
+Signed-off-by: Christoph Hellwig <hch@lst.de>
+Reported-by: Jeffrey Bastian <jbastian@redhat.com>
+
+---
+ libxfs/xfs_fs.h | 8 ++------
+ 2 files changed, 3 insertions(+), 6 deletions(-)
+
+
+diff --git a/libxfs/xfs_fs.h b/libxfs/xfs_fs.h
+index b9622ba..1f17e1c 100644
+--- a/libxfs/xfs_fs.h
++++ b/libxfs/xfs_fs.h
+@@ -542,12 +542,8 @@ typedef struct xfs_swapext
+ #define XFS_IOC_ERROR_CLEARALL	     _IOW ('X', 117, struct xfs_error_injection)
+ /*	XFS_IOC_ATTRCTL_BY_HANDLE -- deprecated 118	 */
+ 
+-/*	XFS_IOC_FREEZE		  -- FIFREEZE   119	 */
+-/*	XFS_IOC_THAW		  -- FITHAW     120	 */
+-#ifndef FIFREEZE
+-#define XFS_IOC_FREEZE		     _IOWR('X', 119, int)
+-#define XFS_IOC_THAW		     _IOWR('X', 120, int)
+-#endif
++#define XFS_IOC_FREEZE		     _IOWR('X', 119, int)	/* aka FIFREEZE */
++#define XFS_IOC_THAW		     _IOWR('X', 120, int)	/* aka FITHAW */
+ 
+ #define XFS_IOC_FSSETDM_BY_HANDLE    _IOW ('X', 121, struct xfs_fsop_setdm_handlereq)
+ #define XFS_IOC_ATTRLIST_BY_HANDLE   _IOW ('X', 122, struct xfs_fsop_attrlist_handlereq)
+
+diff --git a/include/linux.h b/include/linux.h
+index cc0f70c..0c616f4 100644
+--- a/include/linux.h
++++ b/include/linux.h
+@@ -32,6 +32,7 @@
+ #include <stdio.h>
+ #include <asm/types.h>
+ #include <mntent.h>
++#include <linux/fs.h> /* fsxattr defintion for new kernels */
+ 
+ static __inline__ int xfsctl(const char *path, int fd, int cmd, void *p)
+ {

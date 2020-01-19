@@ -1,0 +1,93 @@
+Disable finobt by default for compatibility w/ old RHEL7 kernels.
+
+Disable experimental sparse inode support entirely.
+
+Index: xfsprogs-4.5.0/man/man8/mkfs.xfs.8
+===================================================================
+--- xfsprogs-4.5.0.orig/man/man8/mkfs.xfs.8
++++ xfsprogs-4.5.0/man/man8/mkfs.xfs.8
+@@ -167,9 +167,10 @@ filesystems age.
+ .IP
+ By default,
+ .B mkfs.xfs
+-will create free inode btrees for filesystems created with the (default)
+-.B \-m crc=1
+-option set. When the option
++will not create free inode btrees for filesystems.  This is for backwards
++compatibility with older RHEL7 kernels.  If the free inode btree is enabled,
++older RHEL7 kernels will not be able to mount the created filesystem.
++When the option
+ .B \-m crc=0
+ is used, the free inode btree feature is not supported and is disabled.
+ .TP
+@@ -419,21 +420,8 @@ If the value is omitted, 1 is assumed.  
+ in release version 3.2.0.)
+ .TP
+ .BI sparse[= value ]
+-Enable sparse inode chunk allocation. The
+-.I value
+-is either 0 or 1, with 1 signifying that sparse allocation is enabled.
+-If the value is omitted, 1 is assumed. Sparse inode allocation is
+-disabled by default. This feature is only available for filesystems
+-formatted with
+-.B \-m crc=1.
+-.IP
+-When enabled, sparse inode allocation allows the filesystem to allocate
+-smaller than the standard 64-inode chunk when free space is severely
+-limited. This feature is useful for filesystems that might fragment free
+-space over time such that no free extents are large enough to
+-accommodate a chunk of 64 inodes. Without this feature enabled, inode
+-allocations can fail with out of space errors under severe fragmented
+-free space conditions.
++Enable sparse inode chunk allocation. This experimental option is not
++available in RHEL7.
+ .RE
+ .TP
+ .BI \-l " log_section_options"
+Index: xfsprogs-4.5.0/mkfs/xfs_mkfs.c
+===================================================================
+--- xfsprogs-4.5.0.orig/mkfs/xfs_mkfs.c
++++ xfsprogs-4.5.0/mkfs/xfs_mkfs.c
+@@ -105,8 +105,6 @@ char	*iopts[] = {
+ 	"attr",
+ #define	I_PROJID32BIT	6
+ 	"projid32bit",
+-#define I_SPINODES	7
+-	"sparse",
+ 	NULL
+ };
+ 
+@@ -1019,7 +1017,7 @@ main(
+ 	worst_freelist = 0;
+ 	lazy_sb_counters = 1;
+ 	crcs_enabled = 1;
+-	finobt = 1;
++	finobt = 0;
+ 	finobtflag = false;
+ 	spinodes = 0;
+ 	memset(&fsx, 0, sizeof(fsx));
+@@ -1343,6 +1341,7 @@ main(
+ 						illegal(value, "i projid32bit");
+ 					projid16bit = c ? 0 : 1;
+ 					break;
++#if 0
+ 				case I_SPINODES:
+ 					if (!value || *value == '\0')
+ 						value = "1";
+@@ -1350,6 +1349,7 @@ main(
+ 					if (spinodes < 0 || spinodes > 1)
+ 						illegal(value, "i spinodes");
+ 					break;
++#endif
+ 				default:
+ 					unknown('i', value);
+ 				}
+@@ -3213,7 +3213,7 @@ usage( void )
+ 			    sectlog=n|sectsize=num\n\
+ /* force overwrite */	[-f]\n\
+ /* inode size */	[-i log=n|perblock=n|size=num,maxpct=n,attr=0|1|2,\n\
+-			    projid32bit=0|1,sparse=0|1]\n\
++			    projid32bit=0|1]\n\
+ /* no discard */	[-K]\n\
+ /* log subvol */	[-l agnum=n,internal,size=num,logdev=xxx,version=n\n\
+ 			    sunit=value|su=num,sectlog=n|sectsize=num,\n\

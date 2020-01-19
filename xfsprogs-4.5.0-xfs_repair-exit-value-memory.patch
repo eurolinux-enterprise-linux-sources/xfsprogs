@@ -1,0 +1,58 @@
+xfs_repair: don't mark the fs dirty just because memory possibly be low
+
+
+
+When I run "xfs_repair -n" on a 500T device with 16G memory,
+xfs_repair print warning as below:
+
+  Memory available for repair (11798MB) may not be sufficient.
+  At least 64048MB is needed to repair this filesystem efficiently
+  If repair fails due to lack of memory, please
+  turn prefetching off (-P) to reduce the memory footprint.
+
+And it return 1 at last. But xfs_repair didn't hit any error, it
+just feel the memory maybe too low(not real), then return error.
+There is no reason to mark the fs dirty just because it thinks it
+might *possibly* be low on memory.
+
+do_warn() will set fs_is_dirty=1, if we only want to print warning
+message(not real failure), turn to use do_log() will be better.
+
+Signed-off-by: Zorro Lang <zlang@redhat.com>
+---
+ repair/xfs_repair.c | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/repair/xfs_repair.c b/repair/xfs_repair.c
+index 9d91f2d..bbf0edc 100644
+--- a/repair/xfs_repair.c
++++ b/repair/xfs_repair.c
+@@ -851,16 +851,16 @@ main(int argc, char **argv)
+ 	  "with the -m option. Please increase it to at least %lu.\n"),
+ 					mem_used / 1024);
+ 			}
+-			do_warn(
++			do_log(
+ 	_("Memory available for repair (%luMB) may not be sufficient.\n"
+ 	  "At least %luMB is needed to repair this filesystem efficiently\n"
+ 	  "If repair fails due to lack of memory, please\n"),
+ 				max_mem / 1024, mem_used / 1024);
+ 			if (do_prefetch)
+-				do_warn(
++				do_log(
+ 	_("turn prefetching off (-P) to reduce the memory footprint.\n"));
+ 			else
+-				do_warn(
++				do_log(
+ 	_("increase system RAM and/or swap space to at least %luMB.\n"),
+ 			mem_used * 2 / 1024);
+ 
+-- 
+2.5.5
+
+_______________________________________________
+xfs mailing list
+xfs@oss.sgi.com
+http://oss.sgi.com/mailman/listinfo/xfs
+
+

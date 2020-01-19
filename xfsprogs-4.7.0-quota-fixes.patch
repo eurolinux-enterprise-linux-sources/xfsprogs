@@ -1,0 +1,327 @@
+commit 52e81d72272a00c692cb6fdaa49df8b59a539c50
+Author: Zorro Lang <zlang@redhat.com>
+Date:   Thu Aug 4 11:29:49 2016 +1000
+
+    xfs_quota: fall back silently if XFS_GETNEXTQUOTA fails
+    
+    After XFS_GETNEXTQUOTA feature has been merged into linux kernel and
+    xfsprogs, xfs_quota use Q_XGETNEXTQUOTA for report and dump, and
+    fall back to old XFS_GETQUOTA ioctl if XFS_GETNEXTQUOTA fails.
+    
+    But when XFS_GETNEXTQUOTA fails, xfs_quota print a warning as
+    "XFS_GETQUOTA: Invalid argument". That's due to kernel can't
+    recognize XFS_GETNEXTQUOTA ioctl and return EINVAL. At this time,
+    the warning is helpless, xfs_quota just need to fall back.
+    
+    Signed-off-by: Zorro Lang <zlang@redhat.com>
+    Reviewed-by: Dave Chinner <dchinner@redhat.com>
+    Signed-off-by: Dave Chinner <david@fromorbit.com>
+
+commit f61be1b4401e7653b2bdcd3aac2130a4da10faa5
+Author: Eric Sandeen <sandeen@redhat.com>
+Date:   Fri Jun 3 11:04:15 2016 +1000
+
+    xfs_quota: only round up timer reporting > 1 day
+    
+    I was too hasty with:
+    
+    d1fe6ff xfs_quota: remove extra 30 seconds from time limit reporting
+    
+    The point of that extra 30s, turns out, was to allow the user
+    to set a limit, query it, and get back what they just set, if
+    it is set to more than a day.
+    
+    Without it, if we set a grace period to i.e. 3 days, and query it
+    1 second later, the rounding in the time_to_string function returns
+    "2 days" not "3 days" as it did before, because we are at
+    2 days 23:59:59 and it essentially applies a floor() for
+    brevity.  I guess this was confusing.
+    
+    (I've run into this same conundrum on my stove digital timer;
+    if you set it to 10m, it blinks "10" at you twice so that you
+    know what you set, then quickly flips to 9 as it counts down).
+    
+    In some cases, however (and this is the case that prompted the
+    prior patch), we display a full "XYZ days hh:mm:ss" - we do this
+    if the verbose flag is set, or if the timer is less than one day.
+    In these cases, we should not add the 30s, because we are showing
+    full time resolution to the user.
+    
+    Reported-by: Zorro Lang <zlang@redhat.com>
+    Signed-off-by: Eric Sandeen <sandeen@redhat.com>
+    Reviewed-by: Zorro Lang <zlang@redhat.com>
+    Reviewed-by: Christoph Hellwig <hch@lst.de>
+    Signed-off-by: Dave Chinner <david@fromorbit.com>
+
+commit a8b6f5274724ea2413d40f452f58874a36b78499
+Author: Eric Sandeen <sandeen@sandeen.net>
+Date:   Mon May 30 12:21:31 2016 +1000
+
+    xfs_quota: check report_mount return value
+    
+    The new call to report_mount doesn't check the return value
+    like every other caller does...
+    
+    Returning 1 means it printed something; if the terse flag
+    is used and there is no usage, nothing gets printed.
+    If we set the NO_HEADER_FLAG anyway, then we won't see
+    the header for subsequent entries as we expect.
+    
+    For example, project ID 0 has no usage in this case:
+    
+    # xfs_quota -x -c "report -a" /mnt/test
+    Project quota on /mnt/test (/dev/sdb1)
+                                   Blocks
+    Project ID       Used       Soft       Hard    Warn/Grace
+    ---------- --------------------------------------------------
+    #0                  0          0          0     00 [--------]
+    project          2048          4          4     00 [--none--]
+    
+    So using the terse flag results in no header when it prints
+    projects with usage:
+    
+    # xfs_quota -x -c "report -t -a" /mnt/test
+    project          2048          4          4     00 [--none--]
+    
+    With this fix it prints the header as expected:
+    
+    # xfs_quota -x -c "report -t -a" /mnt/test
+    Project quota on /mnt/test (/dev/sdb1)
+                                   Blocks
+    Project ID       Used       Soft       Hard    Warn/Grace
+    ---------- --------------------------------------------------
+    project          2048          4          4     00 [--none--]
+    
+    Addresses-Coverity-Id: 1361552
+    Signed-off-by: Eric Sandeen <sandeen@redhat.com>
+    Reviewed-by: Zorro Lang <zlang@redhat.com>
+    Reviewed-by: Christoph Hellwig <hch@lst.de>
+    Signed-off-by: Dave Chinner <david@fromorbit.com>
+
+commit 3d607a1134c55849952412d64e7658fb00312705
+Author: Zorro Lang <zlang@redhat.com>
+Date:   Tue May 10 17:16:06 2016 +1000
+
+    xfs_quota: print quota id number if the name can't be found
+    
+    When use GETNEXTQUOTA ioctl to report project quota, it always
+    report an unexpected quota:
+    
+      (null) 0 0 0 00 [--------]
+    
+    The ID 0 store the default quota, even if no one set default quota,
+    it still have quota accounting, but not enforced. So GETNEXTQUOTA
+    can find and report this undefined quota.
+    
+    From this problem, I thought if others' quota name miss, (null) will
+    be printed too. e.g.
+    
+      # xfs_quota -xc "limit -u bsoft=300m bhard=400m test" $mnt
+      # xfs_quota -xc "report -u" $mnt
+      User ID          Used       Soft       Hard    Warn/Grace
+      ---------- --------------------------------------------------
+      root                0          0          0     00 [--------]
+      test                0     307200     409600     00 [--------]
+      # userdel -r test
+      # xfs_quota -xc "report -u" $mnt
+      User ID          Used       Soft       Hard    Warn/Grace
+      ---------- --------------------------------------------------
+      root                0          0          0     00 [--------]
+      (null)              0     307200     409600     00 [--------]
+    
+    So this problem same with above id 0's problem. To deal with this,
+    this patch will print id number if the name can't be found.
+    
+    However, if we use the old GETQUOTA ioctl, it won't print project id
+    0 quota information if it's not defined. That's different with
+    GETNEXTQUOTA. For keep consistent, this patch also print project id
+    0 when use old GETQUOTA.
+    
+    Signed-off-by: Zorro Lang <zlang@redhat.com>
+    Reviewed-by: Eric Sandeen <sandeen@redhat.com>
+    Reviewed-by: Christoph Hellwig <hch@lst.de>
+    Signed-off-by: Dave Chinner <david@fromorbit.com>
+
+commit cef37d5a0ef68351ea97518249b0c91746e700e3
+Author: Zorro Lang <zlang@redhat.com>
+Date:   Tue May 10 17:16:06 2016 +1000
+
+    xfs_quota: fully support users and groups beginning with digits
+    
+    A normal user or group name allow beginning with digits, but xfs_quota
+    can't create a limit for that user or group. The reason is 'strtoul'
+    function only translate digits at the beginning, it will ignore
+    letters after digits.
+    
+    There's a commit fd537fc50eeade63bbd2a66105f39d04a011a7f5, it try to
+    fix "xfsprogs: xfs_quota allow user or group names beginning with
+    digits". But it doesn't effect 'limit' command, so a command likes:
+    
+      xfs_quota 'limit .... 12345678-user' xxxx
+    
+    will try to create limit for username="12345678", not "12345678-user".
+    
+    This patch will fix this problem, and a test case xfs/138 in xfstests
+    is used to reproduce this bug.
+    
+    Signed-off-by: Zorro Lang <zlang@redhat.com>
+    Reviewed-by: Eric Sandeen <sandeen@redhat.com>
+    Signed-off-by: Dave Chinner <david@fromorbit.com>
+
+commit 43633a39ef424e9e867b34a5dd3ea6c44508a45c
+Author: Eric Sandeen <sandeen@sandeen.net>
+Date:   Wed Feb 17 17:03:02 2016 +1100
+
+    xfs: wire up Q_XGETNEXTQUOTA / get_nextdqblk
+    
+    Source kernel commit 296c24e26ee3af2dbfecb482e6bc9560bd34c455
+    
+    Add code to allow the Q_XGETNEXTQUOTA quotactl to quickly find
+    all active quotas by examining the quota inode, and skipping
+    over unallocated or uninitialized regions.
+    
+    Userspace can then use this interface rather than i.e. a
+    getpwent() loop when asked to report all active quotas.
+    
+    Signed-off-by: Eric Sandeen <sandeen@redhat.com>
+    Reviewed-by: Dave Chinner <dchinner@redhat.com>
+    Signed-off-by: Dave Chinner <david@fromorbit.com>
+Index: xfsprogs-4.5.0/quota/report.c
+===================================================================
+--- xfsprogs-4.5.0.orig/quota/report.c
++++ xfsprogs-4.5.0/quota/report.c
+@@ -90,8 +90,10 @@ dump_file(
+ 	else
+ 		cmd = XFS_GETQUOTA;
+ 
++	/* Fall back silently if XFS_GETNEXTQUOTA fails, warn on XFS_GETQUOTA */
+ 	if (xfsquotactl(cmd, dev, type, id, (void *)&d) < 0) {
+-		if (errno != ENOENT && errno != ENOSYS && errno != ESRCH)
++		if (errno != ENOENT && errno != ENOSYS && errno != ESRCH &&
++		    cmd == XFS_GETQUOTA)
+ 			perror("XFS_GETQUOTA");
+ 		return 0;
+ 	}
+@@ -347,8 +349,10 @@ report_mount(
+ 	else
+ 		cmd = XFS_GETQUOTA;
+ 
++	/* Fall back silently if XFS_GETNEXTQUOTA fails, warn on XFS_GETQUOTA*/
+ 	if (xfsquotactl(cmd, dev, type, id, (void *)&d) < 0) {
+-		if (errno != ENOENT && errno != ENOSYS && errno != ESRCH)
++		if (errno != ENOENT && errno != ENOSYS && errno != ESRCH &&
++		    cmd == XFS_GETQUOTA)
+ 			perror("XFS_GETQUOTA");
+ 		return 0;
+ 	}
+@@ -389,7 +393,11 @@ report_mount(
+ 					name = p->pr_name;
+ 			}
+ 		}
+-		fprintf(fp, "%-10s", name);
++		/* If no name is found, print the id #num instead of (null) */
++		if (name != NULL)
++			fprintf(fp, "%-10s", name);
++		else
++			fprintf(fp, "#%-9u", d.d_id);
+ 	}
+ 
+ 	if (form & XFS_BLOCK_QUOTA) {
+@@ -571,6 +579,16 @@ report_project_mount(
+ 			id = oid + 1;
+ 		}
+ 	} else {
++		if (!getprprid(0)) {
++			/*
++			 * Print default project quota, even if projid 0
++			 * isn't defined
++			 */
++			if (report_mount(fp, 0, NULL, NULL,
++					form, XFS_PROJ_QUOTA, mount, flags))
++				flags |= NO_HEADER_FLAG;
++		}
++
+ 		setprent();
+ 		while ((p = getprent()) != NULL) {
+ 			if (report_mount(fp, p->pr_prid, p->pr_name, NULL,
+Index: xfsprogs-4.5.0/quota/util.c
+===================================================================
+--- xfsprogs-4.5.0.orig/quota/util.c
++++ xfsprogs-4.5.0/quota/util.c
+@@ -43,6 +43,18 @@ time_to_string(
+ 		timer = MAX(origin - now, 0);
+ 	}
+ 
++	/*
++	 * If we are in verbose mode, or if less than a day remains, we
++	 * will show "X days hh:mm:ss" so the user knows the exact timer status.
++	 *
++	 * Otherwise, we round down to the nearest day - so we add 30s here
++	 * such that setting and reporting a limit in rapid succession will
++	 * show the limit which was just set, rather than immediately reporting
++	 * one day less.
++	 */
++	if ((timer > SECONDS_IN_A_DAY) && !(flags & VERBOSE_FLAG))
++		timer += 30;	/* seconds */
++
+ 	days = timer / SECONDS_IN_A_DAY;
+ 	if (days)
+ 		timer %= SECONDS_IN_A_DAY;
+Index: xfsprogs-4.5.0/man/man8/xfs_quota.8
+===================================================================
+--- xfsprogs-4.5.0.orig/man/man8/xfs_quota.8
++++ xfsprogs-4.5.0/man/man8/xfs_quota.8
+@@ -357,7 +357,9 @@ option outputs the report to
+ .I file
+ instead of stdout. The
+ .B \-a
+-option reports on all filesystems. The
++option reports on all filesystems. By default, outputs the name of
++the user/group/project. If no name is defined for a given ID, outputs
++the numeric ID instead. The
+ .B \-n
+ option outputs the numeric ID instead of the name. The
+ .B \-L
+Index: xfsprogs-4.5.0/libxcmd/input.c
+===================================================================
+--- xfsprogs-4.5.0.orig/libxcmd/input.c
++++ xfsprogs-4.5.0/libxcmd/input.c
+@@ -366,7 +366,7 @@ uid_from_string(
+ 	char		*sp;
+ 
+ 	uid_long = strtoul(user, &sp, 10);
+-	if (sp != user) {
++	if (sp != user && *sp == '\0') {
+ 		if ((uid_long == ULONG_MAX && errno == ERANGE)
+ 				|| (uid_long > (uid_t)-1))
+ 			return -1;
+@@ -387,7 +387,7 @@ gid_from_string(
+ 	char		*sp;
+ 
+ 	gid_long = strtoul(group, &sp, 10);
+-	if (sp != group) {
++	if (sp != group && *sp == '\0') {
+ 		if ((gid_long == ULONG_MAX && errno == ERANGE)
+ 				|| (gid_long > (gid_t)-1))
+ 			return -1;
+Index: xfsprogs-4.5.0/libxfs/xfs_quota_defs.h
+===================================================================
+--- xfsprogs-4.5.0.orig/libxfs/xfs_quota_defs.h
++++ xfsprogs-4.5.0/libxfs/xfs_quota_defs.h
+@@ -37,7 +37,7 @@ typedef __uint16_t	xfs_qwarncnt_t;
+ #define XFS_DQ_PROJ		0x0002		/* project quota */
+ #define XFS_DQ_GROUP		0x0004		/* a group quota */
+ #define XFS_DQ_DIRTY		0x0008		/* dquot is dirty */
+-#define XFS_DQ_FREEING		0x0010		/* dquot is beeing torn down */
++#define XFS_DQ_FREEING		0x0010		/* dquot is being torn down */
+ 
+ #define XFS_DQ_ALLTYPES		(XFS_DQ_USER|XFS_DQ_PROJ|XFS_DQ_GROUP)
+ 
+@@ -116,6 +116,7 @@ typedef __uint16_t	xfs_qwarncnt_t;
+ #define XFS_QMOPT_DQREPAIR	0x0001000 /* repair dquot if damaged */
+ #define XFS_QMOPT_GQUOTA	0x0002000 /* group dquot requested */
+ #define XFS_QMOPT_ENOSPC	0x0004000 /* enospc instead of edquot (prj) */
++#define XFS_QMOPT_DQNEXT	0x0008000 /* return next dquot >= this ID */
+ 
+ /*
+  * flags to xfs_trans_mod_dquot to indicate which field needs to be

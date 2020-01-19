@@ -1,0 +1,33 @@
+Revert, because off64_t isn't available w/o LFS defines;
+upstream this needs to be handled seamlessly but we don't
+want to change existing RHEL behavior for code that includes
+xfs.h
+
+commit cb898f157f8410a03cf5f3400baa1df9e5eecd33
+Author: Felix Janda <felix.janda@posteo.de>
+Date:   Fri Feb 5 08:34:06 2016 +1100
+
+    linux.h: Use off64_t instead of loff_t
+    
+    These are equivalent on glibc, while musl does not know loff_t.
+    
+    In the long run, it would be preferable to enable transparent LFS so
+    that off64_t could be replaced by off_t.
+    
+    Signed-off-by: Felix Janda <felix.janda@posteo.de>
+    Reviewed-by: Christoph Hellwig <hch@lst.de>
+    Signed-off-by: Dave Chinner <david@fromorbit.com>
+
+diff --git a/include/linux.h b/include/linux.h
+index 674717c..a7d2f85 100644
+--- a/include/linux.h
++++ b/include/linux.h
+@@ -141,7 +141,7 @@ platform_discard_blocks(int fd, uint64_t start, uint64_t len)
+ #define EFSCORRUPTED	EUCLEAN	/* Filesystem is corrupted */
+ #define EFSBADCRC	EBADMSG	/* Bad CRC detected */
+ 
+-typedef off64_t		xfs_off_t;
++typedef loff_t		xfs_off_t;
+ typedef __uint64_t	xfs_ino_t;
+ typedef __uint32_t	xfs_dev_t;
+ typedef __int64_t	xfs_daddr_t;

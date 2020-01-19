@@ -1,0 +1,35 @@
+commit 595629131dbe6c5fb16d03e87bc2cb71ad3dcc4b
+Author: Eric Sandeen <sandeen@redhat.com>
+Date:   Wed Feb 15 21:48:31 2017 -0600
+
+    xfs_metadump: ignore attr leaf with 0 entries
+    
+    Another in the ongoing saga of attribute leaves with zero
+    entries; in this case, if we try to metadump an inode with
+    a zero-entries attribute leaf, the zeroing code will go off
+    the rails and segfault at:
+    
+                    memset(&entries[nentries], 0,
+                           first_name - (char *)&entries[nentries]);
+    
+    because first_name is null, and we try to memset a large
+    (negative) number.
+    
+    Signed-off-by: Eric Sandeen <sandeen@redhat.com>
+    Reviewed-by: Darrick J. Wong <darrick.wong@oracle.com>
+    Signed-off-by: Eric Sandeen <sandeen@sandeen.net>
+
+diff --git a/db/metadump.c b/db/metadump.c
+index 38519f1..66952f6 100644
+--- a/db/metadump.c
++++ b/db/metadump.c
+@@ -1654,7 +1654,8 @@ process_attr_block(
+ 	xfs_attr3_leaf_hdr_from_disk(mp->m_attr_geo, &hdr, leaf);
+ 
+ 	nentries = hdr.count;
+-	if (nentries * sizeof(xfs_attr_leaf_entry_t) +
++	if (nentries == 0 ||
++	    nentries * sizeof(xfs_attr_leaf_entry_t) +
+ 			xfs_attr3_leaf_hdr_size(leaf) >
+ 				XFS_ATTR3_RMT_BUF_SPACE(mp, bs)) {
+ 		if (show_warnings)

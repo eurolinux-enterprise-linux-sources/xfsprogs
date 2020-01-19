@@ -1,0 +1,34 @@
+commit 027e6efd2b432232562d726f14702f79792b38cb
+Author: Eric Sandeen <sandeen@sandeen.net>
+Date:   Mon May 30 10:35:56 2016 +1000
+
+    xfs_db: defang frag command
+    
+    Too many people freak out about this fictitious "fragmentation
+    factor."  As shown in the fact, it is largely meaningless, because
+    the number approaches 100% extremely quickly for just a few
+    extents per file.
+    
+    I thought about removing it altogether, but perhaps a note
+    about its uselessness, and a more soothing metric (avg extents
+    per file) might be useful.
+    
+    Signed-off-by: Eric Sandeen <sandeen@redhat.com>
+    Reviewed-by: Christoph Hellwig <hch@lst.de>
+    Signed-off-by: Dave Chinner <david@fromorbit.com>
+
+Index: xfsprogs-4.5.0/db/frag.c
+===================================================================
+--- xfsprogs-4.5.0.orig/db/frag.c
++++ xfsprogs-4.5.0/db/frag.c
+@@ -172,6 +172,10 @@ frag_f(
+ 		answer = 0.0;
+ 	dbprintf(_("actual %llu, ideal %llu, fragmentation factor %.2f%%\n"),
+ 		extcount_actual, extcount_ideal, answer);
++	dbprintf(_("Note, this number is largely meaningless.\n"));
++	answer = (double)extcount_actual / (double)extcount_ideal;
++	dbprintf(_("Files on this filesystem average %.2f extents per file\n"),
++		answer);
+ 	return 0;
+ }
+ 

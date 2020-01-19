@@ -1,0 +1,79 @@
+commit cbca895541facb3a1a00fd0fe6614301a64c0e3a
+Author: Eric Sandeen <sandeen@redhat.com>
+Date:   Fri Sep 23 09:16:52 2016 +1000
+
+    xfs_copy: Fix meta UUID handling on multiple copies
+    
+    Zorro reported that when making multiple copies of a V5
+    filesystem with xfs_copy while generating new UUIDs, all
+    but the first copy were corrupt.
+    
+    Upon inspection, the corruption was related to incorrect UUIDs;
+    the original UUID, as stamped into every metadata structure,
+    was not preserved in the sb_meta_uuid field of the superblock
+    on any but the first copy.
+    
+    This happened because sb_update_uuid was using the UUID present in
+    the ag_hdr structure as the unchanging meta-uuid which is to match
+    existing structures, but it also /updates/ that UUID with the
+    new identifying UUID present in tcarg.  So the newly-generated
+    UUIDs moved transitively from tcarg->uuid to ag_hdr->xfs_sb->sb_uuid
+    to ag_hdr->xfs_sb->sb_meta_uuid each time the function got called.
+    
+    Fix this by looking instead to the unchanging, original UUID
+    present in the xfs_sb_t we are given, which reflects the original
+    filesystem's metadata UUID, and copy /that/ UUID into each target
+    filesystem's meta_uuid field.
+    
+    Most of this patch is changing comments and re-ordering tests
+    to match; the functional change is to simply use the *sb rather
+    than the *ag_hdr to identify the proper metadata UUID.
+    
+    Reported-and-tested-by: Zorro Lang <zlang@redhat.com>
+    Signed-off-by: Eric Sandeen <sandeen@redhat.com>
+    Reviewed-by: Dave Chinner <dchinner@redhat.com>
+    Signed-off-by: Dave Chinner <david@fromorbit.com>
+
+diff --git a/copy/xfs_copy.c b/copy/xfs_copy.c
+index 3c8998c..22ded6b 100644
+--- a/copy/xfs_copy.c
++++ b/copy/xfs_copy.c
+@@ -494,27 +494,29 @@ write_wbuf(void)
+ 
+ void
+ sb_update_uuid(
+-	xfs_sb_t	*sb,
+-	ag_header_t	*ag_hdr,
+-	thread_args	*tcarg)
++	xfs_sb_t	*sb,		/* Original fs superblock */
++	ag_header_t	*ag_hdr,	/* AG hdr to update for this copy */
++	thread_args	*tcarg)		/* Args for this thread, with UUID */
+ {
+ 	/*
+ 	 * If this filesystem has CRCs, the original UUID is stamped into
+-	 * all metadata.  If we are changing the UUID in the copy, we need
+-	 * to copy the original UUID into the meta_uuid slot and set the
+-	 * set the incompat flag if that hasn't already been done.
++	 * all metadata.  If we don't have an existing meta_uuid field in the
++	 * the original filesystem and we are changing the UUID in this copy,
++	 * we must copy the original sb_uuid to the sb_meta_uuid slot and set
++	 * the incompat flag for the feature on this copy.
+ 	 */
+-	if (!uuid_equal(&tcarg->uuid, &ag_hdr->xfs_sb->sb_uuid) &&
+-	    xfs_sb_version_hascrc(sb) && !xfs_sb_version_hasmetauuid(sb)) {
++	if (xfs_sb_version_hascrc(sb) && !xfs_sb_version_hasmetauuid(sb) &&
++	    !uuid_equal(&tcarg->uuid, &sb->sb_uuid)) {
+ 		__be32 feat;
+ 
+ 		feat = be32_to_cpu(ag_hdr->xfs_sb->sb_features_incompat);
+ 		feat |= XFS_SB_FEAT_INCOMPAT_META_UUID;
+ 		ag_hdr->xfs_sb->sb_features_incompat = cpu_to_be32(feat);
+ 		platform_uuid_copy(&ag_hdr->xfs_sb->sb_meta_uuid,
+-				   &ag_hdr->xfs_sb->sb_uuid);
++				   &sb->sb_uuid);
+ 	}
+ 
++	/* Copy the (possibly new) fs-identifier UUID into sb_uuid */
+ 	platform_uuid_copy(&ag_hdr->xfs_sb->sb_uuid, &tcarg->uuid);
+ 
+ 	/* We may have changed the UUID, so update the superblock CRC */

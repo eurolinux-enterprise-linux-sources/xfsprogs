@@ -1,0 +1,49 @@
+commit 41c702ce4b2bbea59e49384a90e17c64e46bd3ae
+Author: Andreas Gruenbacher <agruenba@redhat.com>
+Date:   Tue Nov 1 10:38:40 2016 +1100
+
+    xfs_io: Fix initial -m option
+    
+    Like "open -m mode", the initial -m option requires a mode argument.
+    
+    Document these options correctly as well.
+    
+    Signed-off-by: Andreas Gruenbacher <agruenba@redhat.com>
+    Reviewed-by: Dave Chinner <dchinner@redhat.com>
+    Signed-off-by: Dave Chinner <david@fromorbit.com>
+
+Index: xfsprogs-4.5.0/io/init.c
+===================================================================
+--- xfsprogs-4.5.0.orig/io/init.c
++++ xfsprogs-4.5.0/io/init.c
+@@ -32,7 +32,7 @@ void
+ usage(void)
+ {
+ 	fprintf(stderr,
+-		_("Usage: %s [-adfmnrRstVx] [-p prog] [-c cmd]... file\n"),
++		_("Usage: %s [-adfnrRstVx] [-m mode] [-p prog] [-c cmd]... file\n"),
+ 		progname);
+ 	exit(1);
+ }
+@@ -139,7 +139,7 @@ init(
+ 	pagesize = getpagesize();
+ 	gettimeofday(&stopwatch, NULL);
+ 
+-	while ((c = getopt(argc, argv, "ac:dFfmp:nrRstTVx")) != EOF) {
++	while ((c = getopt(argc, argv, "ac:dFfm:p:nrRstTVx")) != EOF) {
+ 		switch (c) {
+ 		case 'a':
+ 			flags |= IO_APPEND;
+Index: xfsprogs-4.5.0/io/open.c
+===================================================================
+--- xfsprogs-4.5.0.orig/io/open.c
++++ xfsprogs-4.5.0/io/open.c
+@@ -759,7 +759,7 @@ open_init(void)
+ 	open_cmd.argmin = 0;
+ 	open_cmd.argmax = -1;
+ 	open_cmd.flags = CMD_NOMAP_OK | CMD_NOFILE_OK | CMD_FOREIGN_OK;
+-	open_cmd.args = _("[-acdrstxT] [path]");
++	open_cmd.args = _("[-acdrstxT] [-m mode] [path]");
+ 	open_cmd.oneline = _("open the file specified by path");
+ 	open_cmd.help = open_help;
+ 

@@ -1,0 +1,35 @@
+From b04647edea32dbbce0fc12ea6f54a8da706a2265 Mon Sep 17 00:00:00 2001
+From: Eric Sandeen <sandeen@redhat.com>
+Date: Mon, 19 Sep 2016 16:01:14 +1000
+Subject: [PATCH] xfs_repair: exit with status 2 if log dirtiness is unknown
+
+This new case is mostly like the known dirty log case; the log
+is corrupt, dirtiness cannot be determined, and a mount/umount
+cycle or an xfs_repair -L is required.
+
+So exit with status 2 here as well.
+
+Signed-off-by: Eric Sandeen <sandeen@redhat.com>
+Reviewed-by: Zorro Lang <zlang@redhat.com>
+Signed-off-by: Dave Chinner <david@fromorbit.com>
+---
+ repair/phase2.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+Index: xfsprogs-4.5.0/repair/phase2.c
+===================================================================
+--- xfsprogs-4.5.0.orig/repair/phase2.c
++++ xfsprogs-4.5.0/repair/phase2.c
+@@ -79,10 +79,11 @@ zero_log(
+ 		_("zero_log: cannot find log head/tail (xlog_find_tail=%d)\n"),
+ 			error);
+ 		if (!no_modify && !zap_log)
+-			do_error(_(
++			do_warn(_(
+ "ERROR: The log head and/or tail cannot be discovered. Attempt to mount the\n"
+ "filesystem to replay the log or use the -L option to destroy the log and\n"
+ "attempt a repair.\n"));
++			exit(2);
+ 	} else {
+ 		if (verbose) {
+ 			do_log(
