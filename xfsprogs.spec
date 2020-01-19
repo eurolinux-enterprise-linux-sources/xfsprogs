@@ -1,7 +1,7 @@
 Summary:	Utilities for managing the XFS filesystem
 Name:		xfsprogs
 Version:	4.5.0
-Release:	18%{?dist}
+Release:	20%{?dist}
 # Licensing based on generic "GNU GENERAL PUBLIC LICENSE"
 # in source, with no mention of version.
 # doc/COPYING file specifies what is GPL and what is LGPL
@@ -55,6 +55,11 @@ Patch29:	xfsprogs-4.15.0-xfsprogs-update-dead-urls.patch
 Patch30:	xfsprogs-4.17.0-xfsprogs-be-careful-about-what-we-stat-in-platform_c.patch
 Patch31:	xfsprogs-4.17.0-xfs_io-add-label-command.patch
 Patch32:	xfsprogs-4.18-repair-root-parent.patch
+# RHEL-7.7
+Patch33:	xfsprogs-4.15.0-xfs_copy-accept-CRC-version-of-ABTB_MAGIC-in-ASSERT.patch
+Patch34:	xfsprogs-4.20-xfs_quota-fix-false-error-reporting-of-project-inhertance-flag.patch
+Patch35:	xfsprogs-4.20-xfs_repair-initialize-non-leaf-finobt-blocks-with-co.patch
+
 
 %description
 A set of commands to use the XFS filesystem, including mkfs.xfs.
@@ -114,6 +119,9 @@ also want to install xfsprogs.
 %patch30 -p1
 %patch31 -p1
 %patch32 -p1
+%patch33 -p1
+%patch34 -p1
+%patch35 -p1
 
 %build
 export tagname=CC
@@ -179,6 +187,13 @@ rm -rf $RPM_BUILD_ROOT
 %{_libdir}/*.so
 
 %changelog
+* Mon Feb 11 2019 Eric Sandeen <sandeen@redhat.com> 4.5.0-20
+- xfs_quota: fix errors if project flag is not set on regular files (#1663502)
+- xfs_repair: initialize non-leaf finobt blocks with correct magic (#1670154)
+
+* Mon Feb 11 2019 Eric Sandeen <sandeen@redhat.com> 4.5.0-19
+- xfs_copy: accept CRC version of ABTB_MAGIC in ASSERT (#1641023)
+
 * Wed Jun 20 2018 Eric Sandeen <sandeen@redhat.com> 4.5.0-18
 - xfs_repar: Fix root inode's parent for sf directory (#1590334)
 
