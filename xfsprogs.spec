@@ -1,15 +1,15 @@
 Summary:	Utilities for managing the XFS filesystem
 Name:		xfsprogs
 Version:	4.5.0
-Release:	20%{?dist}
+Release:	12%{?dist}
 # Licensing based on generic "GNU GENERAL PUBLIC LICENSE"
 # in source, with no mention of version.
 # doc/COPYING file specifies what is GPL and what is LGPL
 # but no mention of versions in the source.
 License:	GPL+ and LGPLv2+
 Group:		System Environment/Base
-URL:		https://xfs.wiki.kernel.org
-Source0:	http://kernel.org/pub/linux/utils/fs/xfs/xfsprogs/%{name}-%{version}.tar.gz
+URL:		http://oss.sgi.com/projects/xfs/
+Source0:	ftp://oss.sgi.com/projects/xfs/cmd_tars/%{name}-%{version}.tar.gz
 Source1:	xfsprogs-wrapper.h
 BuildRoot:	%{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
 BuildRequires:	libtool, gettext, libattr-devel, libuuid-devel
@@ -36,30 +36,6 @@ Patch12:	xfsprogs-4.9.0-junk-attr-leaf-count-zero.patch
 Patch13:	xfsprogs-4.8.0-xfs_copy-UUID.patch
 Patch14:	xfsprogs-4.10.0-xfs_metadump-ignore-0-entries.patch
 Patch15:	xfsprogs-4.9-xfs_io-fix-m-option.patch
-# RHEL-7.5
-Patch16:	xfsprogs-4.8.0-mkfs.xfs-clarify-ftype-defaults-in-manpage.patch
-Patch17:	xfsprogs-4.12.0-mkfs.xfs-allow-specification-of-0-data-stripe-width-.patch
-Patch18:	xfsprogs-4.12.0-xfs_db-update-buffer-size-when-new-type-is-set.patch
-Patch19:	xfsprogs-4.12.0-xfs_db-improve-argument-naming-in-set_cur-and-set_io.patch
-Patch20:	xfsprogs-4.12.0-xfs_db-properly-set-inode-type.patch
-Patch21:	xfsprogs-4.13.0-mkfs.xfs-Don-t-stagger-AG-for-a-single-disk.patch
-Patch22:	xfsprogs-4.13.0-xfs_repair-don-t-use-do_warn-for-normal-log-message.patch
-Patch23:	xfsprogs-4.11.0-xfs_repair-warn-about-dirty-log-with-n-option.patch
-Patch24:	xfsprogs-4.8.0-xfs_repair-exit-with-status-2-if-log-dirtiness-is-un.patch
-Patch25:	xfsprogs-4.16-xfs_repair-handle-corrupt-log.patch
-# RHEL-7.6
-Patch26:	xfsprogs-4.10.0-xfs_db-fix-the-source-command-when-passed-as-a-c-opt.patch
-Patch27:	xfsprogs-4.14.0-db-increase-metadump-s-default-overly-long-extent-di.patch
-Patch28:	xfsprogs-4.15.0-xfs_db-fix-crash-when-field-list-selector-string-has.patch
-Patch29:	xfsprogs-4.15.0-xfsprogs-update-dead-urls.patch
-Patch30:	xfsprogs-4.17.0-xfsprogs-be-careful-about-what-we-stat-in-platform_c.patch
-Patch31:	xfsprogs-4.17.0-xfs_io-add-label-command.patch
-Patch32:	xfsprogs-4.18-repair-root-parent.patch
-# RHEL-7.7
-Patch33:	xfsprogs-4.15.0-xfs_copy-accept-CRC-version-of-ABTB_MAGIC-in-ASSERT.patch
-Patch34:	xfsprogs-4.20-xfs_quota-fix-false-error-reporting-of-project-inhertance-flag.patch
-Patch35:	xfsprogs-4.20-xfs_repair-initialize-non-leaf-finobt-blocks-with-co.patch
-
 
 %description
 A set of commands to use the XFS filesystem, including mkfs.xfs.
@@ -70,6 +46,10 @@ support large files and large filesystems, extended attributes,
 variable block sizes, is extent based, and makes extensive use of
 Btrees (directories, extents, free space) to aid both performance
 and scalability.
+
+Refer to the documentation at http://oss.sgi.com/projects/xfs/
+for complete details.  This implementation is on-disk compatible
+with the IRIX version of XFS.
 
 %package devel
 Summary: XFS filesystem-specific headers
@@ -102,26 +82,6 @@ also want to install xfsprogs.
 %patch13 -p1
 %patch14 -p1
 %patch15 -p1
-%patch16 -p1
-%patch17 -p1
-%patch18 -p1
-%patch19 -p1
-%patch20 -p1
-%patch21 -p1
-%patch22 -p1
-%patch23 -p1
-%patch24 -p1
-%patch25 -p1
-%patch26 -p1
-%patch27 -p1
-%patch28 -p1
-%patch29 -p1
-%patch30 -p1
-%patch31 -p1
-%patch32 -p1
-%patch33 -p1
-%patch34 -p1
-%patch35 -p1
 
 %build
 export tagname=CC
@@ -187,38 +147,6 @@ rm -rf $RPM_BUILD_ROOT
 %{_libdir}/*.so
 
 %changelog
-* Mon Feb 11 2019 Eric Sandeen <sandeen@redhat.com> 4.5.0-20
-- xfs_quota: fix errors if project flag is not set on regular files (#1663502)
-- xfs_repair: initialize non-leaf finobt blocks with correct magic (#1670154)
-
-* Mon Feb 11 2019 Eric Sandeen <sandeen@redhat.com> 4.5.0-19
-- xfs_copy: accept CRC version of ABTB_MAGIC in ASSERT (#1641023)
-
-* Wed Jun 20 2018 Eric Sandeen <sandeen@redhat.com> 4.5.0-18
-- xfs_repar: Fix root inode's parent for sf directory (#1590334)
-
-* Wed Jun 13 2018 Eric Sandeen <sandeen@redhat.com> 4.5.0-17
-- xfs_io: add online label command (#1584912)
-
-* Thu May 31 2018 Eric Sandeen <sandeen@redhat.com> 4.5.0-16
-- xfs_db: fix the source command when passed as -c option (#1510279)
-- xfs_metadump: allow much larger extent counts (#1502927)
-- xfs_db: fix crash when field list selector has garbage (#1532271)
-- mkfs.xfs, others: don't stat non-block devices on startup (#1573974)
-- Update project URLs throughout the pkg, code and docs (#1550798)
-
-* Tue Feb 27 2018 Eric Sandeen <sandeen@redhat.com> 4.5.0-15
-- xfs_repair: allow repair of corrupt log (#1549525)
-
-* Thu Jan 25 2018 Eric Sandeen <sandeen@redhat.com> 4.5.0-14
-- xfs_repair: fix incorrect exit status (#1523008)
-
-* Fri Oct 06 2017 Eric Sandeen <sandeen@redhat.com> 4.5.0-13
-- mkfs.xfs: clarify ftype defaults in manpage (#1488124)
-- mkfs.xfs: allow specification of 0 data stripe width (#1444166)
-- mkfs.xfs: Don't stagger AG for a single disk (#1492552)
-- xfs_db: xfs_db-update-buffer-size-when-new-type-is-set (#1458670)
-
 * Tue May 09 2017 Eric Sandeen <sandeen@redhat.com> 4.5.0-12
 - xfs_io: Fix initial -m option (#1447270)
 
