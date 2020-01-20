@@ -1,7 +1,7 @@
 Summary:	Utilities for managing the XFS filesystem
 Name:		xfsprogs
 Version:	4.5.0
-Release:	12%{?dist}
+Release:	15%{?dist}
 # Licensing based on generic "GNU GENERAL PUBLIC LICENSE"
 # in source, with no mention of version.
 # doc/COPYING file specifies what is GPL and what is LGPL
@@ -36,6 +36,17 @@ Patch12:	xfsprogs-4.9.0-junk-attr-leaf-count-zero.patch
 Patch13:	xfsprogs-4.8.0-xfs_copy-UUID.patch
 Patch14:	xfsprogs-4.10.0-xfs_metadump-ignore-0-entries.patch
 Patch15:	xfsprogs-4.9-xfs_io-fix-m-option.patch
+# RHEL-7.5
+Patch16:	xfsprogs-4.8.0-mkfs.xfs-clarify-ftype-defaults-in-manpage.patch
+Patch17:	xfsprogs-4.12.0-mkfs.xfs-allow-specification-of-0-data-stripe-width-.patch
+Patch18:	xfsprogs-4.12.0-xfs_db-update-buffer-size-when-new-type-is-set.patch
+Patch19:	xfsprogs-4.12.0-xfs_db-improve-argument-naming-in-set_cur-and-set_io.patch
+Patch20:	xfsprogs-4.12.0-xfs_db-properly-set-inode-type.patch
+Patch21:	xfsprogs-4.13.0-mkfs.xfs-Don-t-stagger-AG-for-a-single-disk.patch
+Patch22:	xfsprogs-4.13.0-xfs_repair-don-t-use-do_warn-for-normal-log-message.patch
+Patch23:	xfsprogs-4.11.0-xfs_repair-warn-about-dirty-log-with-n-option.patch
+Patch24:	xfsprogs-4.8.0-xfs_repair-exit-with-status-2-if-log-dirtiness-is-un.patch
+Patch25:	xfsprogs-4.16-xfs_repair-handle-corrupt-log.patch
 
 %description
 A set of commands to use the XFS filesystem, including mkfs.xfs.
@@ -82,6 +93,16 @@ also want to install xfsprogs.
 %patch13 -p1
 %patch14 -p1
 %patch15 -p1
+%patch16 -p1
+%patch17 -p1
+%patch18 -p1
+%patch19 -p1
+%patch20 -p1
+%patch21 -p1
+%patch22 -p1
+%patch23 -p1
+%patch24 -p1
+%patch25 -p1
 
 %build
 export tagname=CC
@@ -147,6 +168,18 @@ rm -rf $RPM_BUILD_ROOT
 %{_libdir}/*.so
 
 %changelog
+* Tue Feb 27 2018 Eric Sandeen <sandeen@redhat.com> 4.5.0-15
+- xfs_repair: allow repair of corrupt log (#1549525)
+
+* Thu Jan 25 2018 Eric Sandeen <sandeen@redhat.com> 4.5.0-14
+- xfs_repair: fix incorrect exit status (#1523008)
+
+* Fri Oct 06 2017 Eric Sandeen <sandeen@redhat.com> 4.5.0-13
+- mkfs.xfs: clarify ftype defaults in manpage (#1488124)
+- mkfs.xfs: allow specification of 0 data stripe width (#1444166)
+- mkfs.xfs: Don't stagger AG for a single disk (#1492552)
+- xfs_db: xfs_db-update-buffer-size-when-new-type-is-set (#1458670)
+
 * Tue May 09 2017 Eric Sandeen <sandeen@redhat.com> 4.5.0-12
 - xfs_io: Fix initial -m option (#1447270)
 
